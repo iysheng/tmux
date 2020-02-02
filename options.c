@@ -57,6 +57,7 @@ struct options_entry {
 };
 
 struct options {
+	/* rb tree 的根节点，管理 options_entry 结构体 */
 	RB_HEAD(options_tree, options_entry)	 tree;
 	struct options				*parent;
 };

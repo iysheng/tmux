@@ -89,15 +89,18 @@ osdep_get_cwd(int fd)
 	return (NULL);
 }
 
+/* 和操作系统强相关的 libevent 初始化 */
 struct event_base *
 osdep_event_init(void)
 {
 	struct event_base	*base;
 
 	/* On Linux, epoll doesn't work on /dev/null (yes, really). */
+	/* 禁用 epoll 策略 */
 	setenv("EVENT_NOEPOLL", "1", 1);
 
-	base = event_init();
+	/* 初始化 libevent 的 api */
+	base = event_base_new();
 	unsetenv("EVENT_NOEPOLL");
 	return (base);
 }

@@ -144,6 +144,7 @@ fail:
 }
 
 /* Fork new server. */
+/* 创建了 server 线程 */
 int
 server_start(struct tmuxproc *client, struct event_base *base, int lockfd,
     char *lockfile)

@@ -174,7 +174,9 @@ proc_start(const char *name)
 	struct tmuxproc	*tp;
 	struct utsname	 u;
 
+	/* 尝试记录日志，如果没有 -v 选项，这里可以认为是空 */
 	log_open(name);
+	/* 修改线程的名字 */
 	setproctitle("%s (%s)", name, socket_path);
 
 	if (uname(&u) < 0)
@@ -185,6 +187,7 @@ proc_start(const char *name)
 	log_debug("on %s %s %s; libevent %s (%s)", u.sysname, u.release,
 	    u.version, event_get_version(), event_get_method());
 
+	/* 申请一个 tmuxproc 结构体实例，将首地址保存到 tp 指针 */
 	tp = xcalloc(1, sizeof *tp);
 	tp->name = xstrdup(name);
 
@@ -219,10 +222,12 @@ proc_set_signals(struct tmuxproc *tp, void (*signalcb)(int))
 	sa.sa_flags = SA_RESTART;
 	sa.sa_handler = SIG_IGN;
 
+	/* 忽略掉这三个信号 */
 	sigaction(SIGINT, &sa, NULL);
 	sigaction(SIGPIPE, &sa, NULL);
 	sigaction(SIGTSTP, &sa, NULL);
 
+	/* 注册 libevent 对应事件的回调函数 */
 	signal_set(&tp->ev_sighup, SIGHUP, proc_signal_cb, tp);
 	signal_add(&tp->ev_sighup, NULL);
 	signal_set(&tp->ev_sigchld, SIGCHLD, proc_signal_cb, tp);

@@ -1042,6 +1042,7 @@ struct layout_cell {
 };
 
 /* Environment variable. */
+/* 保存环境变量的基本结构体，通过 rb tree 管理 */
 struct environ_entry {
 	char		*name;
 	char		*value;

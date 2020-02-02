@@ -33,8 +33,11 @@
 
 #include "tmux.h"
 
+/* 包含了管理保存 server 类型选项的 rb head */
 struct options	*global_options;	/* server options */
+/* 包含了管理保存 session 类型的选项的 rb head */
 struct options	*global_s_options;	/* session options */
+/* 包含了管理保存 window 类型选项的 rb head */
 struct options	*global_w_options;	/* window options */
 struct environ	*global_environ;
 
@@ -122,6 +125,7 @@ make_label(const char *label, char **cause)
 		xasprintf(&base, "%s/tmux-%ld", s, (long)uid);
 	else
 		xasprintf(&base, "%s/tmux-%ld", _PATH_TMP, (long)uid);
+	/* 将符号链接展开为实际的绝对路径名，保存到 resolved 目录 */
 	if (realpath(base, resolved) == NULL &&
 	    strlcpy(resolved, base, sizeof resolved) >= sizeof resolved) {
 		errno = ERANGE;
@@ -130,6 +134,7 @@ make_label(const char *label, char **cause)
 	}
 	free(base);
 
+	/* 创建目录，所有者拥有读写执行权限 */
 	if (mkdir(resolved, S_IRWXU) != 0 && errno != EEXIST)
 		goto fail;
 	if (lstat(resolved, &sb) != 0)
@@ -142,6 +147,7 @@ make_label(const char *label, char **cause)
 		errno = EACCES;
 		goto fail;
 	}
+	/* 设置本地 socket 的文件名字 */
 	xasprintf(&path, "%s/%s", resolved, label);
 	return (path);
 
@@ -171,6 +177,7 @@ find_cwd(void)
 	static char	 cwd[PATH_MAX];
 	const char	*pwd;
 
+	/* 获取当前工作路径的名字 */
 	if (getcwd(cwd, sizeof cwd) == NULL)
 		return (NULL);
 	if ((pwd = getenv("PWD")) == NULL || *pwd == '\0')
@@ -259,18 +266,23 @@ main(int argc, char **argv)
 		case 'f':
 			set_cfg_file(optarg);
 			break;
+			/* 打印 tmux 的版本号 */
  		case 'V':
 			printf("%s %s\n", getprogname(), getversion());
  			exit(0);
 		case 'l':
 			flags |= CLIENT_LOGIN;
 			break;
+			/* 指定创建的 socket 的名字，默认是 default */
 		case 'L':
 			free(label);
 			label = xstrdup(optarg);
 			break;
 		case 'q':
 			break;
+			/* 指定创建的 socket 的路径，默认是 /tmp
+			 * 指定了 -S 选项后，会忽略掉 -L 选项参数
+			 * */
 		case 'S':
 			free(path);
 			path = xstrdup(optarg);
@@ -279,6 +291,7 @@ main(int argc, char **argv)
 			flags |= CLIENT_UTF8;
 			break;
 		case 'v':
+			/* 使能日志记录 */
 			log_add_level();
 			break;
 		default:
@@ -319,20 +332,28 @@ main(int argc, char **argv)
 			flags |= CLIENT_UTF8;
 	}
 
+	/* 将系统环境变量拆分为 key 和 value 的格式保存到
+	 * global_environ 这个 rb tree 的根节点
+	 * 这里的 environ 是保存系统环境变量的全局变量指针
+	 * */
 	global_environ = environ_create();
 	for (var = environ; *var != NULL; var++)
 		environ_put(global_environ, *var);
 	if ((cwd = find_cwd()) != NULL)
 		environ_set(global_environ, "PWD", "%s", cwd);
 
+	/* 初始化这 3 个 rbtree 根节点 */
 	global_options = options_create(NULL);
 	global_s_options = options_create(NULL);
 	global_w_options = options_create(NULL);
 	for (oe = options_table; oe->name != NULL; oe++) {
+		/* 如果是 server 类型的，赋值给管理 server 的 global_options */
 		if (oe->scope & OPTIONS_TABLE_SERVER)
 			options_default(global_options, oe);
+		/* 如果是 session 类型的，赋值给管理 server 的 global_s_options */
 		if (oe->scope & OPTIONS_TABLE_SESSION)
 			options_default(global_s_options, oe);
+		/* 如果是 window 类型的，赋值给管理 server 的 global_w_options */
 		if (oe->scope & OPTIONS_TABLE_WINDOW)
 			options_default(global_w_options, oe);
 	}
@@ -342,6 +363,7 @@ main(int argc, char **argv)
 	 * if available.
 	 */
 	shell = getshell();
+	/* 设置 session 类型的选项 default-shell */
 	options_set_string(global_s_options, "default-shell", 0, "%s", shell);
 
 	/* Override keys to vi if VISUAL or EDITOR are set. */
@@ -368,6 +390,7 @@ main(int argc, char **argv)
 			path[strcspn(path, ",")] = '\0';
 		}
 	}
+	/* 根据 label ，初始化 path 并返回保存创建的 socket server ？？？ */
 	if (path == NULL && (path = make_label(label, &cause)) == NULL) {
 		if (cause != NULL) {
 			fprintf(stderr, "%s\n", cause);
@@ -375,9 +398,11 @@ main(int argc, char **argv)
 		}
 		exit(1);
 	}
+	/* 记录保存 socket path 的路径 */
 	socket_path = path;
 	free(label);
 
 	/* Pass control to the client. */
+	/* 将控制权交给 client */
 	exit(client_main(osdep_event_init(), argc, argv, flags));
 }

@@ -27,7 +27,7 @@
 /*
  * Environment - manipulate a set of environment variables.
  */
-
+/* 管理环境变量的 rb tree 根节点 */
 RB_HEAD(environ, environ_entry);
 static int environ_cmp(struct environ_entry *, struct environ_entry *);
 RB_GENERATE_STATIC(environ, environ_entry, entry, environ_cmp);
@@ -44,6 +44,7 @@ environ_create(void)
 {
 	struct environ	*env;
 
+	/* 初始化管理系统环境变量的 rb tree 根节点 */
 	env = xcalloc(1, sizeof *env);
 	RB_INIT(env);
 
@@ -138,6 +139,7 @@ environ_clear(struct environ *env, const char *name)
 	}
 }
 
+/* 系统环境变量都是 name=value 格式的 */
 /* Set an environment variable from a NAME=VALUE string. */
 void
 environ_put(struct environ *env, const char *var)

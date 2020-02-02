@@ -69,6 +69,7 @@ static const char	*client_exit_message(void);
  * another client, so block until the lock is released and return -2 to
  * retry. Return -1 on failure to continue and start the server anyway.
  */
+/* 获取创建服务器的锁文件 */
 static int
 client_get_lock(char *lockfile)
 {
@@ -76,11 +77,13 @@ client_get_lock(char *lockfile)
 
 	log_debug("lock file is %s", lockfile);
 
+	/* 创建这把锁文件 */
 	if ((lockfd = open(lockfile, O_WRONLY|O_CREAT, 0600)) == -1) {
 		log_debug("open failed: %s", strerror(errno));
 		return (-1);
 	}
 
+	/* 放置一个非阻塞的互斥锁 */
 	if (flock(lockfd, LOCK_EX|LOCK_NB) == -1) {
 		log_debug("flock failed: %s", strerror(errno));
 		if (errno != EAGAIN)
@@ -99,6 +102,7 @@ client_get_lock(char *lockfile)
 static int
 client_connect(struct event_base *base, const char *path, int start_server)
 {
+	/* 定义一个 local socket 实例 */
 	struct sockaddr_un	sa;
 	size_t			size;
 	int			fd, lockfd = -1, locked = 0;
@@ -106,6 +110,9 @@ client_connect(struct event_base *base, const char *path, int start_server)
 
 	memset(&sa, 0, sizeof sa);
 	sa.sun_family = AF_UNIX;
+	/* 使用之前定义的 socket 路径，赋值给 sa
+	 * 猜测是只要，指定文件的路径存在，那么后续就会 connect 成功
+	 * */
 	size = strlcpy(sa.sun_path, path, sizeof sa.sun_path);
 	if (size >= sizeof sa.sun_path) {
 		errno = ENAMETOOLONG;
@@ -114,10 +121,12 @@ client_connect(struct event_base *base, const char *path, int start_server)
 	log_debug("socket is %s", path);
 
 retry:
+	/* 创建一个本地的面向流的 socket */
 	if ((fd = socket(AF_UNIX, SOCK_STREAM, 0)) == -1)
 		return (-1);
 
 	log_debug("trying connect");
+	/* 尝试链接本地服务端 socket，只要指定的文件所在目录存在就可以？？？ */
 	if (connect(fd, (struct sockaddr *)&sa, sizeof sa) == -1) {
 		log_debug("connect failed: %s", strerror(errno));
 		if (errno != ECONNREFUSED && errno != ENOENT)
@@ -128,6 +137,7 @@ retry:
 
 		if (!locked) {
 			xasprintf(&lockfile, "%s.lock", path);
+			/* 获取这个 socket 的锁 */
 			if ((lockfd = client_get_lock(lockfile)) < 0) {
 				log_debug("didn't get lock (%d)", lockfd);
 
@@ -246,6 +256,7 @@ client_main(struct event_base *base, int argc, char **argv, int flags)
 	size_t			 size;
 
 	/* Ignore SIGCHLD now or daemon() in the server will leave a zombie. */
+	/* 现在忽视掉 SIGCHLD 信号，否则会将服务端的守护进程会被置为僵尸态 */
 	signal(SIGCHLD, SIG_IGN);
 
 	/* Save the flags. */
@@ -280,6 +291,9 @@ client_main(struct event_base *base, int argc, char **argv, int flags)
 
 	/* Create client process structure (starts logging). */
 	client_proc = proc_start("client");
+	/* 设置这个线程处理信号的回调函数
+	 * 基于 libevent 框架，实际是注册对应信号的 event 的回调函数
+	 * */
 	proc_set_signals(client_proc, client_signal);
 
 	/* Initialize the client socket and start the server. */
@@ -729,6 +743,7 @@ client_exec(const char *shell, const char *shellcmd)
 }
 
 /* Callback to handle signals in the client. */
+/* 倾听 libevent 框架下 event 信号事件的回调函数 */
 static void
 client_signal(int sig)
 {
