@@ -67,6 +67,7 @@ static int key_bindings_cmp(struct key_binding *, struct key_binding *);
 RB_GENERATE_STATIC(key_bindings, key_binding, entry, key_bindings_cmp);
 static int key_table_cmp(struct key_table *, struct key_table *);
 RB_GENERATE_STATIC(key_tables, key_table, entry, key_table_cmp);
+/* key_tables 表格 */
 static struct key_tables key_tables = RB_INITIALIZER(&key_tables);
 
 static int
@@ -481,9 +482,11 @@ key_bindings_init(void)
 	struct cmd_parse_result	*pr;
 
 	for (i = 0; i < nitems(defaults); i++) {
+		/* 解析绑定的按键信息 */
 		pr = cmd_parse_from_string(defaults[i], NULL);
 		if (pr->status != CMD_PARSE_SUCCESS)
 			fatalx("bad default key: %s", defaults[i]);
+		/* 追加命令到全局的 tailqueue */
 		cmdq_append(NULL, cmdq_get_command(pr->cmdlist, NULL, NULL, 0));
 		cmd_list_free(pr->cmdlist);
 	}

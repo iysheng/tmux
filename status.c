@@ -276,6 +276,7 @@ status_pop_screen(struct client *c)
 }
 
 /* Initialize status line. */
+/* 初始化 status line 信息 */
 void
 status_init(struct client *c)
 {

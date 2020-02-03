@@ -40,8 +40,10 @@
  * Main server functions.
  */
 
+/* 全局的 clients tail queue 类型 */
 struct clients		 clients;
 
+/* 保存作为服务端的 tmuxproc 实例指针 */
 struct tmuxproc		*server_proc;
 static int		 server_fd = -1;
 static int		 server_exit;
@@ -96,6 +98,7 @@ server_check_marked(void)
 }
 
 /* Create server socket. */
+/* 创建服务端的 socket，返回创建的 socket 句柄 */
 static int
 server_create_socket(char **cause)
 {
@@ -113,10 +116,12 @@ server_create_socket(char **cause)
 	}
 	unlink(sa.sun_path);
 
+	/* 创建服务端的 socket */
 	if ((fd = socket(AF_UNIX, SOCK_STREAM, 0)) == -1)
 		goto fail;
 
 	mask = umask(S_IXUSR|S_IXGRP|S_IRWXO);
+	/* 绑定服务端的 socket 到指定的文件 */
 	if (bind(fd, (struct sockaddr *)&sa, sizeof sa) == -1) {
 		saved_errno = errno;
 		close(fd);
@@ -125,12 +130,14 @@ server_create_socket(char **cause)
 	}
 	umask(mask);
 
+	/* 开始倾听 client 端的链接 */
 	if (listen(fd, 128) == -1) {
 		saved_errno = errno;
 		close(fd);
 		errno = saved_errno;
 		goto fail;
 	}
+	/* 设置 socket 为非阻塞态 */
 	setblocking(fd, 0);
 
 	return (fd);
@@ -154,48 +161,75 @@ server_start(struct tmuxproc *client, struct event_base *base, int lockfd,
 	struct client	*c;
 	char		*cause = NULL;
 
+	/* 创建一对链接的 socket
+	 * parent 进程使用的是 pair[0]
+	 * child 进程使用的是 pair[1]
+	 * */
 	if (socketpair(AF_UNIX, SOCK_STREAM, PF_UNSPEC, pair) != 0)
 		fatal("socketpair failed");
 
 	sigfillset(&set);
+	/* 阻塞所有的信号 */
 	sigprocmask(SIG_BLOCK, &set, &oldset);
 	switch (fork()) {
 	case -1:
 		fatal("fork failed");
 	case 0:
+		/* child 进程 */
 		break;
 	default:
+		/* 恢复所有的信号状态 */
+		/* parent 进程，恢复所有的信号 */
 		sigprocmask(SIG_SETMASK, &oldset, NULL);
+		/* 关闭 pair[1] socket 句柄 */
 		close(pair[1]);
+		/* parent 返回 pair[0] 句柄 */
 		return (pair[0]);
 	}
+	/* child 进程，关闭 pair[0] socket 句柄 */
 	close(pair[0]);
+	/* child 进程后台执行，作为守护进程
+	 * arg1 = 1，
+	 * arg2 = 0，重定向标准输入、输出、错误输出到 /dev/null
+	 * */
 	if (daemon(1, 0) != 0)
 		fatal("daemon failed");
+	/* 修改 client 的 */
 	proc_clear_signals(client, 0);
+	/* fork 进程后，需要重新初始化 event_base */
 	if (event_reinit(base) != 0)
 		fatalx("event_reinit failed");
+	/* 修改线程的名字，申请一个 tmuxproc 实例内存空间 */
 	server_proc = proc_start("server");
 	proc_set_signals(server_proc, server_signal);
+	/* 恢复所有的信号状态 */
 	sigprocmask(SIG_SETMASK, &oldset, NULL);
 
+	/* 如果没有开启 -v 选项，这里为假 */
 	if (log_get_level() > 1)
 		tty_create_log();
 	if (pledge("stdio rpath wpath cpath fattr unix getpw recvfd proc exec "
 	    "tty ps", NULL) != 0)
 		fatal("pledge failed");
 
+	/* 初始化 windows 类型的 rbtree 根节点 */
 	RB_INIT(&windows);
+	/* 初始化 pane 类型的 rbtree 根节点 */
 	RB_INIT(&all_window_panes);
+	/* 初始化 clients 是 tailq */
 	TAILQ_INIT(&clients);
+	/* 初始化 session 类型的 rbtree 根节点 */
 	RB_INIT(&sessions);
+	/* 按键绑定初始化，追加到全局的 tail queue 类型 struct cmdq_list global_queue */
 	key_bindings_init();
 
+	/* 保存启动时间信息 */
 	gettimeofday(&start_time, NULL);
 
 	server_fd = server_create_socket(&cause);
 	if (server_fd != -1)
 		server_update_socket();
+	/* 倾听 pair[1] 的读 event ，即 parent 进程发送给 child 进程的消息 */
 	c = server_client_create(pair[1]);
 
 	if (lockfd >= 0) {
@@ -204,13 +238,16 @@ server_start(struct tmuxproc *client, struct event_base *base, int lockfd,
 		close(lockfd);
 	}
 
+	/* 如果出错了 */
 	if (cause != NULL) {
 		cmdq_append(c, cmdq_get_error(cause));
 		free(cause);
 		c->flags |= CLIENT_EXIT;
 	}
 
+	/* 添加 accept event 的回调函数 server_accept */
 	server_add_accept(0);
+	/* 循环 event 倾听，这个循环不能退出 */
 	proc_loop(server_proc, server_loop);
 
 	job_kill_all();
@@ -220,6 +257,11 @@ server_start(struct tmuxproc *client, struct event_base *base, int lockfd,
 }
 
 /* Server loop callback. */
+/* 服务端的循环回调函数
+ * 目前直到的服务端循环倾听两个句柄
+ * 1. 服务端创建的 socket，等待 client 的链接
+ * 2. child 进程和 parent 进程通讯的 socket peer，child 使用的是 pair[1]，parent 使用的是 pair[0]
+ * */
 static int
 server_loop(void)
 {
@@ -227,7 +269,9 @@ server_loop(void)
 	u_int		 items;
 
 	do {
+		/* 查找 key bind 命令 */
 		items = cmdq_next(NULL);
+		/* 遍历所有的 client */
 		TAILQ_FOREACH(c, &clients, entry) {
 			if (c->flags & CLIENT_IDENTIFIED)
 				items += cmdq_next(c);
@@ -297,6 +341,7 @@ server_update_socket(void)
 	struct stat      sb;
 
 	n = 0;
+	/* 循环变量所有的 sessions */
 	RB_FOREACH(s, sessions, &sessions) {
 		if (s->attached != 0) {
 			n++;
@@ -319,11 +364,13 @@ server_update_socket(void)
 				mode |= S_IXOTH;
 		} else
 			mode &= ~(S_IXUSR|S_IXGRP|S_IXOTH);
+		/* 修改 socket 的权限 */
 		chmod(socket_path, mode);
 	}
 }
 
 /* Callback for server socket. */
+/* 服务端 socket accept 事件的回调函数 */
 static void
 server_accept(int fd, short events, __unused void *data)
 {
@@ -335,6 +382,7 @@ server_accept(int fd, short events, __unused void *data)
 	if (!(events & EV_READ))
 		return;
 
+	/* 接受 client 的连接请求，创建一个信达 socket */
 	newfd = accept(fd, (struct sockaddr *) &sa, &slen);
 	if (newfd == -1) {
 		if (errno == EAGAIN || errno == EINTR || errno == ECONNABORTED)
@@ -350,6 +398,7 @@ server_accept(int fd, short events, __unused void *data)
 		close(newfd);
 		return;
 	}
+	/* 根据传入的 newfd 创建一个新的 client */
 	server_client_create(newfd);
 }
 
@@ -365,12 +414,17 @@ server_add_accept(int timeout)
 	if (server_fd == -1)
 		return;
 
+	/* 初始化一个 accept event */
 	if (event_initialized(&server_ev_accept))
 		event_del(&server_ev_accept);
 
 	if (timeout == 0) {
+		/* 初始化这个事件的 accept 回调函数为 server_accept
+		 * 并且初始化这个 event 关联到默认的 event_base，应该就是当前进程唯一的 event_base
+		 * */
 		event_set(&server_ev_accept, server_fd, EV_READ, server_accept,
 		    NULL);
+		/* 添加这个 event */
 		event_add(&server_ev_accept, NULL);
 	} else {
 		event_set(&server_ev_accept, server_fd, EV_TIMEOUT,
@@ -380,6 +434,7 @@ server_add_accept(int timeout)
 }
 
 /* Signal handler. */
+/* 服务端的 event 事件回调函数 */
 static void
 server_signal(int sig)
 {

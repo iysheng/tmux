@@ -26,6 +26,7 @@
 #include "tmux.h"
 
 /* Global command queue. */
+/* 关联全局命令的 tailqueue 类型 head */
 static struct cmdq_list global_queue = TAILQ_HEAD_INITIALIZER(global_queue);
 
 /* Get command queue name. */
@@ -53,6 +54,7 @@ cmdq_get(struct client *c)
 }
 
 /* Append an item. */
+/* 追加命令到 tailq 链表 */
 struct cmdq_item *
 cmdq_append(struct client *c, struct cmdq_item *item)
 {
@@ -63,6 +65,7 @@ cmdq_append(struct client *c, struct cmdq_item *item)
 		log_debug("%s %s: queue %s (%u)", __func__, cmdq_name(c),
 		    next->name, next->group);
 	}
+	/* 追加命令 */
 	do {
 		next = item->next;
 		item->next = NULL;

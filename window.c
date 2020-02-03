@@ -53,9 +53,11 @@
  */
 
 /* Global window list. */
+/* 全局的 window 列表， rbtree 类型 */
 struct windows windows;
 
 /* Global panes tree. */
+/* 全局的 pane tree， rbtree 类型 */
 struct window_pane_tree all_window_panes;
 static u_int	next_window_pane_id;
 static u_int	next_window_id;

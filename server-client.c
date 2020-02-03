@@ -179,26 +179,36 @@ server_client_is_default_key_table(struct client *c, struct key_table *table)
 }
 
 /* Create a new client. */
+/* 创建一个新的 client */
 struct client *
 server_client_create(int fd)
 {
 	struct client	*c;
 
+	/* 修改为非阻塞态 */
 	setblocking(fd, 0);
 
+	/* 重新申请一个 client 实例内存空间 */
 	c = xcalloc(1, sizeof *c);
 	c->references = 1;
+	/* 当 fd 句柄有数据读取时，会回调到函数 server_client_dispatch 函数
+	 * 返回创建的 peer 保存到 client 实例
+	 * */
 	c->peer = proc_add_peer(server_proc, fd, server_client_dispatch, c);
 
+	/* 记录创建这个 client 的时间戳 */
 	if (gettimeofday(&c->creation_time, NULL) != 0)
 		fatal("gettimeofday failed");
+	/* 赋值激活这个 client 的事件戳 */
 	memcpy(&c->activity_time, &c->creation_time, sizeof c->activity_time);
 
+	/* 创建一个 rb tree head 保存环境变量 */
 	c->environ = environ_create();
 
 	c->fd = -1;
 	c->cwd = NULL;
 
+	/* 初始化这个 client 的 queue，管理的是 key bind 命令信息 */
 	TAILQ_INIT(&c->queue);
 
 	c->tty.fd = -1;
@@ -210,6 +220,7 @@ server_client_create(int fd)
 	c->tty.sx = 80;
 	c->tty.sy = 24;
 
+	/* 初始化 status line 信息 */
 	status_init(c);
 
 	c->message_string = NULL;
@@ -223,12 +234,15 @@ server_client_create(int fd)
 
 	c->flags |= CLIENT_FOCUSED;
 
+	/* 尝试查找一个 root 的 keytable，如果不存在那么创建这个 keytable 并返回 */
 	c->keytable = key_bindings_get_table("root", 1);
 	c->keytable->references++;
 
+	/* 初始化两个 timer 类型 event */
 	evtimer_set(&c->repeat_timer, server_client_repeat_timer, c);
 	evtimer_set(&c->click_timer, server_client_click_timer, c);
 
+	/* 将新创建的 client 实例添加到全局的 clients tail queue 管理起来 */
 	TAILQ_INSERT_TAIL(&clients, c, entry);
 	log_debug("new client %p", c);
 	return (c);
@@ -1700,6 +1714,7 @@ server_client_set_title(struct client *c)
 }
 
 /* Dispatch message from client. */
+/* 分发接受到的 client 发送的消息 */
 static void
 server_client_dispatch(struct imsg *imsg, void *arg)
 {

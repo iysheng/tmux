@@ -26,6 +26,7 @@
 
 #include "tmux.h"
 
+/* 全局的 sessions rb tree 类型 */
 struct sessions		sessions;
 static u_int		next_session_id;
 struct session_groups	session_groups = RB_INITIALIZER(&session_groups);

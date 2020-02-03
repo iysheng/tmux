@@ -171,6 +171,8 @@ retry:
 		free(lockfile);
 		close(lockfd);
 	}
+	/* parent 进程的 fd 为和 child 进程通讯的 socket pair[0] 句柄
+	 * 设置该 socket 为非阻塞态 */
 	setblocking(fd, 0);
 	return (fd);
 
@@ -297,6 +299,7 @@ client_main(struct event_base *base, int argc, char **argv, int flags)
 	proc_set_signals(client_proc, client_signal);
 
 	/* Initialize the client socket and start the server. */
+	/* parent 进程作为 client，得到的这个句柄是可以和 child 进程通讯的 pair[0] */
 	fd = client_connect(base, socket_path, cmdflags & CMD_STARTSERVER);
 	if (fd == -1) {
 		if (errno == ECONNREFUSED) {
@@ -308,6 +311,8 @@ client_main(struct event_base *base, int argc, char **argv, int flags)
 		}
 		return (1);
 	}
+	/* 添加这个和 child 进程，也可以认为就是 server 端
+	 * 通讯的 socket 句柄的回调函数 client_dispatch */
 	client_peer = proc_add_peer(client_proc, fd, client_dispatch, NULL);
 
 	/* Save these before pledge(). */
@@ -333,6 +338,7 @@ client_main(struct event_base *base, int argc, char **argv, int flags)
 	/* Free stuff that is not used in the client. */
 	if (ptm_fd != -1)
 		close(ptm_fd);
+	/* 释放 client 一些变量的内存空间 */
 	options_free(global_options);
 	options_free(global_s_options);
 	options_free(global_w_options);
@@ -394,6 +400,7 @@ client_main(struct event_base *base, int argc, char **argv, int flags)
 		proc_send(client_peer, msg, -1, NULL, 0);
 
 	/* Start main loop. */
+	/* 循环倾听 event 事件 */
 	proc_loop(client_proc, NULL);
 
 	/* Run command if user requested exec, instead of exiting. */
@@ -784,6 +791,7 @@ client_signal(int sig)
 }
 
 /* Callback for client read events. */
+/* client 端接受 server 发送的消息事件的回调函数 */
 static void
 client_dispatch(struct imsg *imsg, __unused void *arg)
 {

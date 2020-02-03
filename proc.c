@@ -60,6 +60,7 @@ struct tmuxpeer {
 static int	peer_check_version(struct tmuxpeer *, struct imsg *);
 static void	proc_update_event(struct tmuxpeer *);
 
+/* event 的回调函数，实际执行的是 peer 的 dispatchcb 回调函数 */
 static void
 proc_event_cb(__unused int fd, short events, void *arg)
 {
@@ -70,6 +71,7 @@ proc_event_cb(__unused int fd, short events, void *arg)
 	if (!(peer->flags & PEER_BAD) && (events & EV_READ)) {
 		if (((n = imsg_read(&peer->ibuf)) == -1 && errno != EAGAIN) ||
 		    n == 0) {
+			/* 实际执行的是 peer 的 dispatchcb 回调函数 */
 			peer->dispatchcb(NULL, peer->arg);
 			return;
 		}
@@ -254,10 +256,12 @@ proc_clear_signals(struct tmuxproc *tp, int defaults)
 	sa.sa_flags = SA_RESTART;
 	sa.sa_handler = SIG_DFL;
 
+	/* 修改 SIGINT、SIGPIPE 和 SIGTSTP 信号默认处理函数 */
 	sigaction(SIGINT, &sa, NULL);
 	sigaction(SIGPIPE, &sa, NULL);
 	sigaction(SIGTSTP, &sa, NULL);
 
+	/* 删除指定信号的 event 回调函数 */
 	signal_del(&tp->ev_sighup);
 	signal_del(&tp->ev_sigchld);
 	signal_del(&tp->ev_sigcont);
@@ -266,6 +270,7 @@ proc_clear_signals(struct tmuxproc *tp, int defaults)
 	signal_del(&tp->ev_sigusr2);
 	signal_del(&tp->ev_sigwinch);
 
+	/* 如果 defaults 为真，那么设置指定信号默认处理函数 */
 	if (defaults) {
 		sigaction(SIGHUP, &sa, NULL);
 		sigaction(SIGCHLD, &sa, NULL);
@@ -290,6 +295,7 @@ proc_add_peer(struct tmuxproc *tp, int fd,
 	peer->arg = arg;
 
 	imsg_init(&peer->ibuf, fd);
+	/* 初始化一个 event，关联的是 fd，回调函数是 proc_event_cb */
 	event_set(&peer->event, fd, EV_READ, proc_event_cb, peer);
 
 	log_debug("add peer %p: %d (%p)", peer, fd, arg);
