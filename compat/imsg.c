@@ -37,7 +37,9 @@ imsg_init(struct imsgbuf *ibuf, int fd)
 {
 	msgbuf_init(&ibuf->w);
 	memset(&ibuf->r, 0, sizeof(ibuf->r));
+	/* 初始化这个 ibuf 的 fd */
 	ibuf->fd = fd;
+	/* 初始化这个 ibuf 的 w 的 fd */
 	ibuf->w.fd = fd;
 	ibuf->pid = getpid();
 	TAILQ_INIT(&ibuf->fds);

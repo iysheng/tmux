@@ -33,6 +33,7 @@
 #include "tmux.h"
 
 static struct tmuxproc	*client_proc;
+/* 客户端 peer */
 static struct tmuxpeer	*client_peer;
 static int		 client_flags;
 static enum {
@@ -126,9 +127,12 @@ retry:
 		return (-1);
 
 	log_debug("trying connect");
-	/* 尝试链接本地服务端 socket，只要指定的文件所在目录存在就可以？？？ */
+	/* 尝试链接本地服务端 socket，只要指定的文件所在目录存在就可以？？？
+	 * 第一次应该是返回 -1 ，因为这个 socket 不存在
+	 * */
 	if (connect(fd, (struct sockaddr *)&sa, sizeof sa) == -1) {
 		log_debug("connect failed: %s", strerror(errno));
+		/* 第一次这个时候应该返回 ENOENT */
 		if (errno != ECONNREFUSED && errno != ENOENT)
 			goto failed;
 		if (!start_server)
@@ -164,6 +168,7 @@ retry:
 			close(lockfd);
 			return (-1);
 		}
+		/* 第一次开启的时候，准备启动 server */
 		fd = server_start(client_proc, base, lockfd, lockfile);
 	}
 
@@ -292,6 +297,8 @@ client_main(struct event_base *base, int argc, char **argv, int flags)
 	}
 
 	/* Create client process structure (starts logging). */
+	/* 修改这个线程的名字为 "client"
+	 * 这个线程目前是 parent 进程  */
 	client_proc = proc_start("client");
 	/* 设置这个线程处理信号的回调函数
 	 * 基于 libevent 框架，实际是注册对应信号的 event 的回调函数
@@ -312,7 +319,10 @@ client_main(struct event_base *base, int argc, char **argv, int flags)
 		return (1);
 	}
 	/* 添加这个和 child 进程，也可以认为就是 server 端
-	 * 通讯的 socket 句柄的回调函数 client_dispatch */
+	 * 通讯的 socket 句柄的回调函数 client_dispatch
+	 * 返回一个 tmuxpeer 实例指针，通过这个指针，可以找到对应的 fd 句柄
+	 * 通过发消息给该句柄，可以发送消息给 server
+	 * */
 	client_peer = proc_add_peer(client_proc, fd, client_dispatch, NULL);
 
 	/* Save these before pledge(). */
@@ -366,6 +376,7 @@ client_main(struct event_base *base, int argc, char **argv, int flags)
 	}
 
 	/* Send identify messages. */
+	/* 发送身份信息，不知道是怎么通过 proc_send 将消息发送出去的 */
 	client_send_identify(ttynam, cwd);
 
 	/* Send first command. */
@@ -390,6 +401,7 @@ client_main(struct event_base *base, int argc, char **argv, int flags)
 		size += sizeof *data;
 
 		/* Send the command. */
+		/* 这里的 fd 为什么是 -1 */
 		if (proc_send(client_peer, msg, -1, data, size) != 0) {
 			fprintf(stderr, "failed to send command\n");
 			free(data);
@@ -432,6 +444,7 @@ client_main(struct event_base *base, int argc, char **argv, int flags)
 }
 
 /* Send identify messages to server. */
+/* 发送身份信息给服务器 */
 static void
 client_send_identify(const char *ttynam, const char *cwd)
 {
@@ -441,6 +454,7 @@ client_send_identify(const char *ttynam, const char *cwd)
 	int		  fd, flags = client_flags;
 	pid_t		  pid;
 
+	/* fd 为什么是 -1？？？ */
 	proc_send(client_peer, MSG_IDENTIFY_FLAGS, -1, &flags, sizeof flags);
 
 	if ((s = getenv("TERM")) == NULL)

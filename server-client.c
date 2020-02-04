@@ -192,7 +192,13 @@ server_client_create(int fd)
 	c = xcalloc(1, sizeof *c);
 	c->references = 1;
 	/* 当 fd 句柄有数据读取时，会回调到函数 server_client_dispatch 函数
-	 * 返回创建的 peer 保存到 client 实例
+	 * 这个 fd 是 child 进程用来和 parent 进程通讯的 socket pair[1]
+	 * parent 进程知道的是 pair[0]
+	 * 返回创建的 tmuxpeer 保存到 client 实例的 peer 成员
+	 * server 端创建的第一个 client 实例，倾听的是和 parent 进程对应的 peer[1] 句柄
+	 * 之后，server 端创建的 client 实例，倾听的都是函数
+	 * server_accept 新创建出来的 socket ？？？
+	 * parent 进程对应的是 client_peer
 	 * */
 	c->peer = proc_add_peer(server_proc, fd, server_client_dispatch, c);
 

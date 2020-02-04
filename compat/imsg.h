@@ -38,6 +38,7 @@ struct ibuf {
 struct msgbuf {
 	TAILQ_HEAD(, ibuf)	 bufs;
 	uint32_t		 queued;
+	/* 读写消息句柄 */
 	int			 fd;
 };
 
@@ -54,9 +55,13 @@ struct imsg_fd {
 
 struct imsgbuf {
 	TAILQ_HEAD(, imsg_fd)	 fds;
+	/* 这个是管理读消息的实例 */
 	struct ibuf_read	 r;
+	/* 这个是管理写消息的管理实例 */
 	struct msgbuf		 w;
+	/* 读写该消息的句柄 */
 	int			 fd;
+	/* 该结构体所属的进程 pid */
 	pid_t			 pid;
 };
 

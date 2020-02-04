@@ -151,7 +151,7 @@ fail:
 }
 
 /* Fork new server. */
-/* 创建了 server 线程 */
+/* 在这里会 fork child 进程，parent 进程作为 client 进程，child 进程作为 server */
 int
 server_start(struct tmuxproc *client, struct event_base *base, int lockfd,
     char *lockfile)
@@ -183,7 +183,7 @@ server_start(struct tmuxproc *client, struct event_base *base, int lockfd,
 		sigprocmask(SIG_SETMASK, &oldset, NULL);
 		/* 关闭 pair[1] socket 句柄 */
 		close(pair[1]);
-		/* parent 返回 pair[0] 句柄 */
+		/* parent 返回 pair[0] 句柄，也就是 client_proc */
 		return (pair[0]);
 	}
 	/* child 进程，关闭 pair[0] socket 句柄 */
@@ -194,13 +194,23 @@ server_start(struct tmuxproc *client, struct event_base *base, int lockfd,
 	 * */
 	if (daemon(1, 0) != 0)
 		fatal("daemon failed");
-	/* 修改 client 的 */
+	/* 修改 child 进程也就是 server 一些信号 SIGINT, SIGPIPE, SIGTSTP 为默认的处理函数
+	 * 因为是 fork 的进程，需要删除 parent 进程关联的一些 event 事件，
+	 * 如果 default 参数为真，那么会重新修改那些 event 关联的信号为默认的
+	 * 处理进程
+	 * */
 	proc_clear_signals(client, 0);
 	/* fork 进程后，需要重新初始化 event_base */
 	if (event_reinit(base) != 0)
 		fatalx("event_reinit failed");
-	/* 修改线程的名字，申请一个 tmuxproc 实例内存空间 */
+	/* 修改线程的名字，申请一个 tmuxproc 实例内存空间
+	 * parent 进程对应的是 client 的 tmuxproc 实例，也就是全局变量
+	 * client_proc
+	 * */
 	server_proc = proc_start("server");
+	/* 修改一些信号的处理函数为 server_signal
+	 * 同时忽略掉三个信号 SIGINT, SIGPIPE, SIGTSTP
+	 * */
 	proc_set_signals(server_proc, server_signal);
 	/* 恢复所有的信号状态 */
 	sigprocmask(SIG_SETMASK, &oldset, NULL);
@@ -332,6 +342,7 @@ server_send_exit(void)
 }
 
 /* Update socket execute permissions based on whether sessions are attached. */
+/* 根据是否有 session 联系到了 server，来更新 socket 的可执行权限 */
 void
 server_update_socket(void)
 {

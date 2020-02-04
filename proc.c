@@ -33,6 +33,8 @@ struct tmuxproc {
 	const char	 *name;
 	int		  exit;
 
+	/* 定义的 event 实例，实际发生时会通过 proc_signal_cb
+	 * 调用的函数，传递的参数就是信号的值 */
 	void		(*signalcb)(int);
 
 	struct event	  ev_sighup;
@@ -44,15 +46,21 @@ struct tmuxproc {
 	struct event	  ev_sigwinch;
 };
 
+/* 这个结构体是用来建立服务端和客户端通讯的联系
+ * 是不是也是 child 进程和 parent 进程通讯的联系 peer
+ * */
 struct tmuxpeer {
+	/* 表示该 tmuxpeer 属于哪个 tmuxproc */
 	struct tmuxproc	*parent;
 
+	/* 描述消息的实例？？？ */
 	struct imsgbuf	 ibuf;
 	struct event	 event;
 
 	int		 flags;
 #define PEER_BAD 0x1
 
+	/* 对应事件发生时执行的回调函数和对应的参数 */
 	void		(*dispatchcb)(struct imsg *, void *);
 	void		 *arg;
 };
@@ -141,16 +149,23 @@ proc_update_event(struct tmuxpeer *peer)
 {
 	short	events;
 
+	/* 先删除这个 event */
 	event_del(&peer->event);
 
 	events = EV_READ;
 	if (peer->ibuf.w.queued > 0)
 		events |= EV_WRITE;
+	/* 重新初始化这个 event
+	 * 这里比上次可能会允许写事件， 这个 peer->ibuf.fd 还是上次传递的 fd
+	 * 到这里的时候，已经在函数 imsg_init(&peer->ibuf, fd) 完成了初始化
+	 * */
 	event_set(&peer->event, peer->ibuf.fd, events, proc_event_cb, peer);
 
+	/* 添加这个 event */
 	event_add(&peer->event, NULL);
 }
 
+/* 这个函数是怎么将消息发送出去的？？？ */
 int
 proc_send(struct tmuxpeer *peer, enum msgtype type, int fd, const void *buf,
     size_t len)
@@ -163,9 +178,13 @@ proc_send(struct tmuxpeer *peer, enum msgtype type, int fd, const void *buf,
 		return (-1);
 	log_debug("sending message %d to peer %p (%zu bytes)", type, peer, len);
 
+	/* 构造消息，这个 -1 很特殊？？？
+	 * 关联这个 fd 到 ibuf
+	 * */
 	retval = imsg_compose(ibuf, type, PROTOCOL_VERSION, -1, fd, vp, len);
 	if (retval != 1)
 		return (-1);
+	/* 是在这里将消息发送出去的？？？ */
 	proc_update_event(peer);
 	return (0);
 }
@@ -217,6 +236,7 @@ proc_set_signals(struct tmuxproc *tp, void (*signalcb)(int))
 {
 	struct sigaction	sa;
 
+	/* event 信号事件回调函数 */
 	tp->signalcb = signalcb;
 
 	memset(&sa, 0, sizeof sa);
@@ -246,6 +266,7 @@ proc_set_signals(struct tmuxproc *tp, void (*signalcb)(int))
 	signal_add(&tp->ev_sigwinch, NULL);
 }
 
+/* 修改一些信号为默认的处理函数 */
 void
 proc_clear_signals(struct tmuxproc *tp, int defaults)
 {
@@ -289,11 +310,15 @@ proc_add_peer(struct tmuxproc *tp, int fd,
 	struct tmuxpeer	*peer;
 
 	peer = xcalloc(1, sizeof *peer);
+	/* 给这个 tmuxpeer 的 parent 成员赋值对应的 tmuxproc 实例指针
+	 * 表示该 tmuxpeer 属于哪个 tmuxproc */
 	peer->parent = tp;
 
+	/* 有事件发生时，执行的函数和参数 */
 	peer->dispatchcb = dispatchcb;
 	peer->arg = arg;
 
+	/* 初始化句柄给读和写的管理结构体？？？ */
 	imsg_init(&peer->ibuf, fd);
 	/* 初始化一个 event，关联的是 fd，回调函数是 proc_event_cb */
 	event_set(&peer->event, fd, EV_READ, proc_event_cb, peer);
