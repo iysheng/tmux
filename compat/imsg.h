@@ -67,7 +67,9 @@ struct imsgbuf {
 
 #define IMSGF_HASFD	1
 
+/* 消息头部， client 和 server 通讯的消息包头部 */
 struct imsg_hdr {
+	/* 消息类型 */
 	uint32_t	 type;
 	uint16_t	 len;
 	uint16_t	 flags;

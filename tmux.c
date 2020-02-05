@@ -118,14 +118,20 @@ make_label(const char *label, char **cause)
 	*cause = NULL;
 
 	if (label == NULL)
+		/* 修正 socket 的名字包含 "default" */
 		label = "default";
+	/* 获取当前用户的 uid */
 	uid = getuid();
 
 	if ((s = getenv("TMUX_TMPDIR")) != NULL && *s != '\0')
 		xasprintf(&base, "%s/tmux-%ld", s, (long)uid);
 	else
+		/* 一般不会设置 TMUX_TMPDIR 环境变量，所以都会走到这里
+		 * 默认创建本地 socket 的路径是 /tmp/tmux-1000 # yys uid = 1000
+		 * 将这个路径字符串保存到 base 指向的内存空间
+		 * */
 		xasprintf(&base, "%s/tmux-%ld", _PATH_TMP, (long)uid);
-	/* 将符号链接展开为实际的绝对路径名，保存到 resolved 目录 */
+	/* 将符号链接展开为实际的绝对路径名，保存到 resolved 指向的内存空间 */
 	if (realpath(base, resolved) == NULL &&
 	    strlcpy(resolved, base, sizeof resolved) >= sizeof resolved) {
 		errno = ERANGE;
@@ -134,7 +140,8 @@ make_label(const char *label, char **cause)
 	}
 	free(base);
 
-	/* 创建目录，所有者拥有读写执行权限 */
+	/* 创建目录对应的目录，默认就是 /tmp/tmux-1000 # yys uid = 1000 目录，
+	 * 所有者拥有读写执行权限 */
 	if (mkdir(resolved, S_IRWXU) != 0 && errno != EEXIST)
 		goto fail;
 	if (lstat(resolved, &sb) != 0)
@@ -147,7 +154,8 @@ make_label(const char *label, char **cause)
 		errno = EACCES;
 		goto fail;
 	}
-	/* 设置本地 socket 的文件名字 */
+	/* 设置本地 socket 的文件名字 /tmp/tmux-1000/default
+	 * 将名字的首地址保存到 path 变量，返回 */
 	xasprintf(&path, "%s/%s", resolved, label);
 	return (path);
 
@@ -327,6 +335,9 @@ main(int argc, char **argv)
 			s = getenv("LANG");
 		if (s == NULL || *s == '\0')
 			s = "";
+		/* 如果环境变量 LC_ALL 的值，包含 UTF-8 或者 UTF8 这类字段
+		 * 那么会设置 flags 标志位 CLIENT_UTF8
+		 * */
 		if (strcasestr(s, "UTF-8") != NULL ||
 		    strcasestr(s, "UTF8") != NULL)
 			flags |= CLIENT_UTF8;
@@ -375,6 +386,9 @@ main(int argc, char **argv)
 		else
 			keys = MODEKEY_EMACS;
 		options_set_number(global_s_options, "status-keys", keys);
+		/* 这个对应的是 mod key？？？ Ctrl - b （default）
+		 * 好像不是
+		 * */
 		options_set_number(global_w_options, "mode-keys", keys);
 	}
 
@@ -390,7 +404,10 @@ main(int argc, char **argv)
 			path[strcspn(path, ",")] = '\0';
 		}
 	}
-	/* 根据 label ，初始化 path 并返回保存创建的 socket server ？？？ */
+	/* 根据 label 如果没有通过 -L 选项指定，默认是 NULL，
+	 * 初始化保存本地 socket 的路径名到 path 并返回， cause 保存的
+	 * 是错误信息
+	 * */
 	if (path == NULL && (path = make_label(label, &cause)) == NULL) {
 		if (cause != NULL) {
 			fprintf(stderr, "%s\n", cause);
@@ -398,11 +415,14 @@ main(int argc, char **argv)
 		}
 		exit(1);
 	}
-	/* 记录保存 socket path 的路径 */
+	/* 记录保存 socket path 的路径到全局变量 socket_path，这是第一阶段做的比较重要的事情 */
 	socket_path = path;
+	/* 释放 label 的内存空间，如果没有 -L 选项初始化，空释放 */
 	free(label);
 
 	/* Pass control to the client. */
-	/* 将控制权交给 client */
+	/* 将控制权交给 client
+	 * 一般情况，即 tmux 未加任何参数，argc = 0, argv = NULL 那么 flags |= CLIENT_UTF8
+	 * */
 	exit(client_main(osdep_event_init(), argc, argv, flags));
 }

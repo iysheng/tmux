@@ -164,20 +164,29 @@ imsg_get(struct imsgbuf *ibuf, struct imsg *imsg)
 	return (datalen + IMSG_HEADER_SIZE);
 }
 
+/*
+ * 简单来说就是 type、peerid、pid、datalen 描述了头部信息
+ * data 描述了消息信息，将这些信息打包为 struct ibuf 实例，添加到
+ * struct imsgbuf *ibuf 通过 struct msgbuf w 成员管理的 tailqueue
+ * */
 int
 imsg_compose(struct imsgbuf *ibuf, uint32_t type, uint32_t peerid, pid_t pid,
     int fd, const void *data, uint16_t datalen)
 {
 	struct ibuf	*wbuf;
 
+	/* 申请一段容纳消息包的内存空间，并且将消息头部填充到 wbuf 的内存空间 */
 	if ((wbuf = imsg_create(ibuf, type, peerid, pid, datalen)) == NULL)
 		return (-1);
 
+	/* 将消息内容填充到消息包 wbuf */
 	if (imsg_add(wbuf, data, datalen) == -1)
 		return (-1);
 
+	/* 标记这个 wbuf 要通过哪个 fd 发送出去 */
 	wbuf->fd = fd;
 
+	/* 将这一包新构造出来的消息 wbuf 添加到 ibuf 管理的消息 tailqueue */
 	imsg_close(ibuf, wbuf);
 
 	return (1);
@@ -223,12 +232,15 @@ imsg_create(struct imsgbuf *ibuf, uint32_t type, uint32_t peerid, pid_t pid,
 
 	hdr.type = type;
 	hdr.flags = 0;
+	/* hdr 的 peerid 和 pid 是做什么的？？？ */
 	hdr.peerid = peerid;
 	if ((hdr.pid = pid) == 0)
 		hdr.pid = ibuf->pid;
+	/* 根据消息内容，构造 struct ibuf 实例 */
 	if ((wbuf = ibuf_dynamic(datalen, MAX_IMSGSIZE)) == NULL) {
 		return (NULL);
 	}
+	/* 将消息的头部添加到 wbuf */
 	if (imsg_add(wbuf, &hdr, sizeof(hdr)) == -1)
 		return (NULL);
 
@@ -246,6 +258,7 @@ imsg_add(struct ibuf *msg, const void *data, uint16_t datalen)
 	return (datalen);
 }
 
+/* 将这一包消息添加到 ibuf 管理的消息 tailqueue */
 void
 imsg_close(struct imsgbuf *ibuf, struct ibuf *msg)
 {

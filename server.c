@@ -151,7 +151,7 @@ fail:
 }
 
 /* Fork new server. */
-/* 在这里会 fork child 进程，parent 进程作为 client 进程，child 进程作为 server */
+/* 在这里会 fork child 进程，parent 进程作为 client ，child 进程作为 server */
 int
 server_start(struct tmuxproc *client, struct event_base *base, int lockfd,
     char *lockfile)
@@ -161,7 +161,7 @@ server_start(struct tmuxproc *client, struct event_base *base, int lockfd,
 	struct client	*c;
 	char		*cause = NULL;
 
-	/* 创建一对链接的 socket
+	/* 创建一对链接的 socket，用来 child 进程和 parent 进程通讯
 	 * parent 进程使用的是 pair[0]
 	 * child 进程使用的是 pair[1]
 	 * */
@@ -175,18 +175,18 @@ server_start(struct tmuxproc *client, struct event_base *base, int lockfd,
 	case -1:
 		fatal("fork failed");
 	case 0:
-		/* child 进程 */
+		/* child 进程，跳出 switch，继续执行 */
 		break;
 	default:
-		/* 恢复所有的信号状态 */
-		/* parent 进程，恢复所有的信号 */
+		/* parent 进程，恢复所有的信号，直接返回可以和 child 进程通讯的 socket 句柄 */
 		sigprocmask(SIG_SETMASK, &oldset, NULL);
 		/* 关闭 pair[1] socket 句柄 */
 		close(pair[1]);
-		/* parent 返回 pair[0] 句柄，也就是 client_proc */
+		/* parent 返回 pair[0] 句柄，可以通过该句柄和 child 进程通讯 */
 		return (pair[0]);
 	}
-	/* child 进程，关闭 pair[0] socket 句柄 */
+	/* child 进程，关闭 pair[0] socket 句柄，只用 pair[1] 句柄
+	 * 就可以和 parent 进程通讯 */
 	close(pair[0]);
 	/* child 进程后台执行，作为守护进程
 	 * arg1 = 1，
@@ -204,8 +204,8 @@ server_start(struct tmuxproc *client, struct event_base *base, int lockfd,
 	if (event_reinit(base) != 0)
 		fatalx("event_reinit failed");
 	/* 修改线程的名字，申请一个 tmuxproc 实例内存空间
-	 * parent 进程对应的是 client 的 tmuxproc 实例，也就是全局变量
-	 * client_proc
+	 * parent 进程对应的是 client 的 tmuxproc 实例，也就是全局变量 client_proc
+	 * 与之读应的 child 进程对应的是 server 的 tmuxproc 实例，也就是全局变量 server_proc
 	 * */
 	server_proc = proc_start("server");
 	/* 修改一些信号的处理函数为 server_signal
@@ -445,7 +445,8 @@ server_add_accept(int timeout)
 }
 
 /* Signal handler. */
-/* 服务端的 event 事件回调函数 */
+/* 服务端倾听 event 事件的回调函数
+ * 与之对应的客户端是 client_signal */
 static void
 server_signal(int sig)
 {

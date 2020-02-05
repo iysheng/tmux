@@ -53,7 +53,7 @@ struct tmuxpeer {
 	/* 表示该 tmuxpeer 属于哪个 tmuxproc */
 	struct tmuxproc	*parent;
 
-	/* 描述消息的实例？？？ */
+	/* 描述消息的实例，这个结构体包含了 fd 句柄 */
 	struct imsgbuf	 ibuf;
 	struct event	 event;
 
@@ -153,6 +153,7 @@ proc_update_event(struct tmuxpeer *peer)
 	event_del(&peer->event);
 
 	events = EV_READ;
+	/* 如果有消息要发送 */
 	if (peer->ibuf.w.queued > 0)
 		events |= EV_WRITE;
 	/* 重新初始化这个 event
@@ -180,7 +181,13 @@ proc_send(struct tmuxpeer *peer, enum msgtype type, int fd, const void *buf,
 
 	/* 构造消息，这个 -1 很特殊？？？
 	 * 关联这个 fd 到 ibuf
+	 * PROROCOL_VERSION 是 imsg_compose 的 peerid
+	 * pid = -1
+	 * fd 是句柄
+	 * vp 是消息内容
+	 * len 是消息的长度
 	 * */
+	/* 将需要发送的消息，包括消息类型，添加到 ibuf 通过 struct msgbuf w 管理的 wbuf tailqueue  */
 	retval = imsg_compose(ibuf, type, PROTOCOL_VERSION, -1, fd, vp, len);
 	if (retval != 1)
 		return (-1);

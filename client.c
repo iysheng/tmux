@@ -35,6 +35,7 @@
 static struct tmuxproc	*client_proc;
 /* 客户端 peer */
 static struct tmuxpeer	*client_peer;
+/* 保存的是 main 函数传递的初始化 flag，一般情况下，该值只是置位了 CLIENT_UTF8  */
 static int		 client_flags;
 static enum {
 	CLIENT_EXIT_NONE,
@@ -140,6 +141,7 @@ retry:
 		close(fd);
 
 		if (!locked) {
+			/* lockfile 的路径默认是 /tmp/tmux-1000/default.lock */
 			xasprintf(&lockfile, "%s.lock", path);
 			/* 获取这个 socket 的锁 */
 			if ((lockfd = client_get_lock(lockfile)) < 0) {
@@ -159,16 +161,22 @@ retry:
 			 * started the server and released the lock between our
 			 * connect() and flock().
 			 */
+			/* 即使拿到了这把 flock，至少也要 retry 1 次 */
 			locked = 1;
 			goto retry;
 		}
 
+		/* 如果拿到了这把锁，尝试删除这个 path 文件，这个 path 默认是
+		 * /tmp/tmux-1000/default 文件，本地作为服务端的 AF_UNIX family 的 socket */
 		if (lockfd >= 0 && unlink(path) != 0 && errno != ENOENT) {
 			free(lockfile);
 			close(lockfd);
 			return (-1);
 		}
-		/* 第一次开启的时候，准备启动 server */
+		/* 第一次开启的时候，准备启动 server
+		 * lockfd 是 flock 锁的句柄
+		 * lockfile 是 flock 锁对应的文件路径
+		 * */
 		fd = server_start(client_proc, base, lockfd, lockfile);
 	}
 
@@ -267,6 +275,7 @@ client_main(struct event_base *base, int argc, char **argv, int flags)
 	signal(SIGCHLD, SIG_IGN);
 
 	/* Save the flags. */
+	/* 保存 main 函数传递的 flags 到全局变量 */
 	client_flags = flags;
 
 	/* Set up the initial command. */
@@ -275,6 +284,7 @@ client_main(struct event_base *base, int argc, char **argv, int flags)
 		msg = MSG_SHELL;
 		cmdflags = CMD_STARTSERVER;
 	} else if (argc == 0) {
+		/* 一般情况会走到这里 */
 		msg = MSG_COMMAND;
 		cmdflags = CMD_STARTSERVER;
 	} else {
@@ -306,7 +316,7 @@ client_main(struct event_base *base, int argc, char **argv, int flags)
 	proc_set_signals(client_proc, client_signal);
 
 	/* Initialize the client socket and start the server. */
-	/* parent 进程作为 client，得到的这个句柄是可以和 child 进程通讯的 pair[0] */
+	/* parent 进程作为 client，得到了一个句柄是可以和 child 进程通讯的 pair[0] */
 	fd = client_connect(base, socket_path, cmdflags & CMD_STARTSERVER);
 	if (fd == -1) {
 		if (errno == ECONNREFUSED) {
@@ -348,13 +358,14 @@ client_main(struct event_base *base, int argc, char **argv, int flags)
 	/* Free stuff that is not used in the client. */
 	if (ptm_fd != -1)
 		close(ptm_fd);
-	/* 释放 client 一些变量的内存空间 */
+	/* 释放 client 一些不需要的变量的内存空间 */
 	options_free(global_options);
 	options_free(global_s_options);
 	options_free(global_w_options);
 	environ_free(global_environ);
 
 	/* Set up control mode. */
+	/* 如果没有 -C 不会置位这个标记位 */
 	if (client_flags & CLIENT_CONTROLCONTROL) {
 		if (tcgetattr(STDIN_FILENO, &saved_tio) != 0) {
 			fprintf(stderr, "tcgetattr failed: %s\n",
@@ -764,7 +775,7 @@ client_exec(const char *shell, const char *shellcmd)
 }
 
 /* Callback to handle signals in the client. */
-/* 倾听 libevent 框架下 event 信号事件的回调函数 */
+/* 作为 client 端倾听 libevent 框架下 event 信号事件的回调函数 */
 static void
 client_signal(int sig)
 {
