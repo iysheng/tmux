@@ -30,12 +30,28 @@ struct ibuf {
 	u_char			*buf;
 	size_t			 size;
 	size_t			 max;
+	/* 描述下一次写数据的位置 */
 	size_t			 wpos;
 	size_t			 rpos;
 	int			 fd;
 };
 
+/* 展开 TAILQ_HEAD */
+#if 0
 struct msgbuf {
+	/* 管理的是 struct ibuf 实例 */
+	struct {
+		struct ibuf *tqh_first;	/* first element */
+		struct ibuf **tqh_last;	/* addr of last next element */
+	} bufs;
+	uint32_t		 queued;
+	/* 读写消息句柄 */
+	int			 fd;
+};
+#endif
+
+struct msgbuf {
+	/* 管理的是 struct ibuf 实例 */
 	TAILQ_HEAD(, ibuf)	 bufs;
 	uint32_t		 queued;
 	/* 读写消息句柄 */
@@ -77,6 +93,7 @@ struct imsg_hdr {
 	uint32_t	 pid;
 };
 
+/* 含有头部的消息抽象 */
 struct imsg {
 	struct imsg_hdr	 hdr;
 	int		 fd;

@@ -167,7 +167,8 @@ imsg_get(struct imsgbuf *ibuf, struct imsg *imsg)
 /*
  * 简单来说就是 type、peerid、pid、datalen 描述了头部信息
  * data 描述了消息信息，将这些信息打包为 struct ibuf 实例，添加到
- * struct imsgbuf *ibuf 通过 struct msgbuf w 成员管理的 tailqueue
+ * struct tmuxpeer 实例的 struct imsgbuf ibuf 成员通过 struct msgbuf w 成员管理的 tailqueue
+ * 实例管理的是 struct ibuf 实例
  * */
 int
 imsg_compose(struct imsgbuf *ibuf, uint32_t type, uint32_t peerid, pid_t pid,
@@ -179,11 +180,11 @@ imsg_compose(struct imsgbuf *ibuf, uint32_t type, uint32_t peerid, pid_t pid,
 	if ((wbuf = imsg_create(ibuf, type, peerid, pid, datalen)) == NULL)
 		return (-1);
 
-	/* 将消息内容填充到消息包 wbuf */
+	/* 将消息内容填充到消息包 struct ibuf wbuf 实例 */
 	if (imsg_add(wbuf, data, datalen) == -1)
 		return (-1);
 
-	/* 标记这个 wbuf 要通过哪个 fd 发送出去 */
+	/* 标记这个 wbuf 要通过哪个 fd 发送出去？？？ */
 	wbuf->fd = fd;
 
 	/* 将这一包新构造出来的消息 wbuf 添加到 ibuf 管理的消息 tailqueue */
@@ -224,6 +225,7 @@ imsg_create(struct imsgbuf *ibuf, uint32_t type, uint32_t peerid, pid_t pid,
 	struct ibuf	*wbuf;
 	struct imsg_hdr	 hdr;
 
+	/* 消息添加爱 imsg_hdr 头部长度 */
 	datalen += IMSG_HEADER_SIZE;
 	if (datalen > MAX_IMSGSIZE) {
 		errno = ERANGE;
@@ -251,6 +253,7 @@ int
 imsg_add(struct ibuf *msg, const void *data, uint16_t datalen)
 {
 	if (datalen)
+		/* 赋值消息数据到 ibuf 的 buf 成员指向的内存空间 */
 		if (ibuf_add(msg, data, datalen) == -1) {
 			ibuf_free(msg);
 			return (-1);
@@ -264,14 +267,18 @@ imsg_close(struct imsgbuf *ibuf, struct ibuf *msg)
 {
 	struct imsg_hdr	*hdr;
 
+	/* struct ibuf 的 buf 成员指向的内存空间的头部是一个 struct imsg_hdr 头部实例 */
 	hdr = (struct imsg_hdr *)msg->buf;
 
 	hdr->flags &= ~IMSGF_HASFD;
+	/* 如果不是 -1 的话，就标记这个 msg 的头部置位 IMSGF_HASFD */
 	if (msg->fd != -1)
 		hdr->flags |= IMSGF_HASFD;
 
+	/* 修改消息的长度？？？ */
 	hdr->len = (uint16_t)msg->wpos;
 
+	/* 将这个消息 ibuf 实例添加到 tmuxpeer 实例 ibuf 成员管理的消息队列 */
 	ibuf_close(&ibuf->w, msg);
 }
 

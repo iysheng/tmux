@@ -95,6 +95,7 @@ tty_create_log(void)
 		fatal("fcntl failed");
 }
 
+/* 根据 client 的 fd（parent 的 stdin 描述符） 和 term （TERM 环境变量）初始化 tty 成员 */
 int
 tty_init(struct tty *tty, struct client *c, int fd, char *term)
 {
@@ -127,6 +128,7 @@ tty_resize(struct tty *tty)
 	struct winsize	 ws;
 	u_int		 sx, sy, xpixel, ypixel;
 
+	/* 获取窗口大小 */
 	if (ioctl(tty->fd, TIOCGWINSZ, &ws) != -1) {
 		sx = ws.ws_col;
 		if (sx == 0) {
@@ -148,6 +150,7 @@ tty_resize(struct tty *tty)
 	}
 	log_debug("%s: %s now %ux%u (%ux%u)", __func__, c->name, sx, sy,
 	    xpixel, ypixel);
+	/* 初始化 tty 实例的 sx、sy、xpixel、ypixel */
 	tty_set_size(tty, sx, sy, xpixel, ypixel);
 	tty_invalidate(tty);
 }
@@ -169,6 +172,7 @@ tty_read_callback(__unused int fd, __unused short events, void *data)
 	size_t		 size = EVBUFFER_LENGTH(tty->in);
 	int		 nread;
 
+	/* 从 parent 的 stdin 获取数据 */
 	nread = evbuffer_read(tty->in, tty->fd, -1);
 	if (nread == 0 || nread == -1) {
 		event_del(&tty->event_in);

@@ -244,7 +244,9 @@ server_client_create(int fd)
 	c->keytable = key_bindings_get_table("root", 1);
 	c->keytable->references++;
 
-	/* 初始化两个 timer 类型 event */
+	/* 初始化两个 timer 类型 event
+	 * 这两个 timer 的 fd 是 -1
+	 * */
 	evtimer_set(&c->repeat_timer, server_client_repeat_timer, c);
 	evtimer_set(&c->click_timer, server_client_click_timer, c);
 
@@ -1026,6 +1028,7 @@ server_client_update_latest(struct client *c)
 	w->latest = c;
 
 	if (options_get_number(w->options, "window-size") == WINDOW_SIZE_LATEST)
+		/* 重新绘制 window */
 		recalculate_size(w);
 }
 
@@ -1232,6 +1235,7 @@ out:
 }
 
 /* Handle a key event. */
+/* 处理一个按键事件 */
 int
 server_client_handle_key(struct client *c, struct key_event *event)
 {
@@ -1720,11 +1724,11 @@ server_client_set_title(struct client *c)
 }
 
 /* Dispatch message from client. */
-/* 分发接受到的 client 发送的消息 */
+/* 分发接收到的 client 发送的消息！！！ */
 static void
 server_client_dispatch(struct imsg *imsg, void *arg)
 {
-	struct client	*c = arg;
+	struct client	*c = (struct client *)arg;
 	const char	*data;
 	ssize_t		 datalen;
 	struct session	*s;
@@ -1741,6 +1745,7 @@ server_client_dispatch(struct imsg *imsg, void *arg)
 	datalen = imsg->hdr.len - IMSG_HEADER_SIZE;
 
 	switch (imsg->hdr.type) {
+	/* 认证相关的消息类型 */
 	case MSG_IDENTIFY_FLAGS:
 	case MSG_IDENTIFY_TERM:
 	case MSG_IDENTIFY_TTYNAME:
@@ -1749,6 +1754,7 @@ server_client_dispatch(struct imsg *imsg, void *arg)
 	case MSG_IDENTIFY_ENVIRON:
 	case MSG_IDENTIFY_CLIENTPID:
 	case MSG_IDENTIFY_DONE:
+		/* 新的 client 需要首先发送认证类消息 */
 		server_client_dispatch_identify(c, imsg);
 		break;
 	case MSG_COMMAND:
@@ -1892,6 +1898,7 @@ error:
 }
 
 /* Handle identify message. */
+/* 处理认证相关的消息类型 */
 static void
 server_client_dispatch_identify(struct client *c, struct imsg *imsg)
 {
@@ -1923,12 +1930,14 @@ server_client_dispatch_identify(struct client *c, struct imsg *imsg)
 	case MSG_IDENTIFY_TTYNAME:
 		if (datalen == 0 || data[datalen - 1] != '\0')
 			fatalx("bad MSG_IDENTIFY_TTYNAME string");
+		/* 获取到 parent 进程发送的 stdin 的设备名字 */
 		c->ttyname = xstrdup(data);
 		log_debug("client %p IDENTIFY_TTYNAME %s", c, data);
 		break;
 	case MSG_IDENTIFY_CWD:
 		if (datalen == 0 || data[datalen - 1] != '\0')
 			fatalx("bad MSG_IDENTIFY_CWD string");
+		/* 保存 tmux 执行时的路径 */
 		if (access(data, X_OK) == 0)
 			c->cwd = xstrdup(data);
 		else if ((home = find_home()) != NULL)
@@ -1940,6 +1949,7 @@ server_client_dispatch_identify(struct client *c, struct imsg *imsg)
 	case MSG_IDENTIFY_STDIN:
 		if (datalen != 0)
 			fatalx("bad MSG_IDENTIFY_STDIN size");
+		/* 保存 parent dup 出来的 stdin 的描述符 */
 		c->fd = imsg->fd;
 		log_debug("client %p IDENTIFY_STDIN %d", c, imsg->fd);
 		break;
@@ -1960,8 +1970,10 @@ server_client_dispatch_identify(struct client *c, struct imsg *imsg)
 		break;
 	}
 
+	/* 如果不是一帧认证消息已经发完的消息类型，则返回 */
 	if (imsg->hdr.type != MSG_IDENTIFY_DONE)
 		return;
+	/* 标记这个 client 已经认证完成 */
 	c->flags |= CLIENT_IDENTIFIED;
 
 	if (*c->ttyname != '\0')
@@ -1982,15 +1994,19 @@ server_client_dispatch_identify(struct client *c, struct imsg *imsg)
 		control_start(c);
 		c->tty.fd = -1;
 	} else if (c->fd != -1) {
+		/* 根据 parent 的 dup 出来的 stdin 描述符和 TERM 环境变量的值，
+		 * 初始化 client 的 tty 成员 */
 		if (tty_init(&c->tty, c, c->fd, c->term) != 0) {
 			close(c->fd);
 			c->fd = -1;
 		} else {
 			if (c->flags & CLIENT_UTF8)
+				/* 标记 client 的 tty 的 flags */
 				c->tty.flags |= TTY_UTF8;
 			if (c->flags & CLIENT_256COLOURS)
 				c->tty.term_flags |= TERM_256COLOURS;
 			tty_resize(&c->tty);
+			/* 置位 CLIENT_TERMINL 的标记，有什么用？？？  */
 			c->flags |= CLIENT_TERMINAL;
 		}
 	}
@@ -1999,10 +2015,12 @@ server_client_dispatch_identify(struct client *c, struct imsg *imsg)
 	 * If this is the first client that has finished identifying, load
 	 * configuration files.
 	 */
+	/* 如果这是第一个 client，加载配置文件 */
 	if ((~c->flags & CLIENT_EXIT) &&
 	    !cfg_finished &&
 	    c == TAILQ_FIRST(&clients) &&
 	    TAILQ_NEXT(c, entry) == NULL)
+		/* 解析配置文件 */
 		start_cfg();
 }
 

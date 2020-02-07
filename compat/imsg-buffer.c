@@ -38,8 +38,10 @@ ibuf_open(size_t len)
 {
 	struct ibuf	*buf;
 
+	/* 构造 struct ibuf 实例 */
 	if ((buf = calloc(1, sizeof(struct ibuf))) == NULL)
 		return (NULL);
+	/* 申请消息数据的内存空间 */
 	if ((buf->buf = malloc(len)) == NULL) {
 		free(buf);
 		return (NULL);
@@ -58,6 +60,7 @@ ibuf_dynamic(size_t len, size_t max)
 	if (max < len)
 		return (NULL);
 
+	/* 根据传入的 len 消息长度，构造可以包含 len 长度消息数据的 struct ibuf 实例 */
 	if ((buf = ibuf_open(len)) == NULL)
 		return (NULL);
 
@@ -95,6 +98,7 @@ ibuf_add(struct ibuf *buf, const void *data, size_t len)
 			return (-1);
 
 	memcpy(buf->buf + buf->wpos, data, len);
+	/* 更新下一次写数据的位置 */
 	buf->wpos += len;
 	return (0);
 }
@@ -293,6 +297,7 @@ static void
 ibuf_enqueue(struct msgbuf *msgbuf, struct ibuf *buf)
 {
 	TAILQ_INSERT_TAIL(&msgbuf->bufs, buf, entry);
+	/* 更新 queued 的要发送的消息的数量 */
 	msgbuf->queued++;
 }
 

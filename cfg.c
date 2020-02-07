@@ -131,6 +131,7 @@ start_cfg(void)
 				continue;
 			}
 			log_debug("expanded %s to %s", next, expanded);
+			/* 解析配置文件 */
 			load_cfg(expanded, c, NULL, CMD_PARSE_QUIET, NULL);
 			free(expanded);
 		}
@@ -141,6 +142,7 @@ start_cfg(void)
 	cmdq_append(NULL, cmdq_get_callback(cfg_done, NULL));
 }
 
+/* 解析 tmux 的配置文件 */
 int
 load_cfg(const char *path, struct client *c, struct cmdq_item *item, int flags,
     struct cmdq_item **new_item)
@@ -168,6 +170,7 @@ load_cfg(const char *path, struct client *c, struct cmdq_item *item, int flags,
 	pi.item = item;
 	pi.c = c;
 
+	/* 根据 pi 的信息解析配置文件，结果保存到 pr */
 	pr = cmd_parse_from_file(f, &pi);
 	fclose(f);
 	if (pr->status == CMD_PARSE_EMPTY)

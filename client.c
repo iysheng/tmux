@@ -287,7 +287,7 @@ client_main(struct event_base *base, int argc, char **argv, int flags)
 		/* 一般情况会走到这里 */
 		msg = MSG_COMMAND;
 		cmdflags = CMD_STARTSERVER;
-	} else {
+	} else {      CMD_
 		msg = MSG_COMMAND;
 
 		/*
@@ -336,8 +336,16 @@ client_main(struct event_base *base, int argc, char **argv, int flags)
 	client_peer = proc_add_peer(client_proc, fd, client_dispatch, NULL);
 
 	/* Save these before pledge(). */
+	/* 获取当前目录的名字保存到 cwd 字符串 */
 	if ((cwd = find_cwd()) == NULL && (cwd = find_home()) == NULL)
 		cwd = "/";
+	/* 获取当前进程标准输入使用的终端名字，测试打印的格式是 /dev/pts/[number] 数字
+	 * 这个 number 会随着打开终端的个数增加而增加
+	 * ptmx, pts - pseudoterminal master and slave，/deb/ptmx 是一个字符设备，通常用来
+	 * 创建伪终端的 master 和 slave 对，进程每打开一次 /dev/ptmx，都会获取一个独立的 ptm 的描述符
+	 * ，同时也会在 /dev/pts 目录创建一个对应的 pts 设备，可以将返回的 ptm 描述符作为参数
+	 * 传递给函数 ptsname，获取对应的 pts 设备名字
+	 * */
 	if ((ttynam = ttyname(STDIN_FILENO)) == NULL)
 		ttynam = "";
 
@@ -387,10 +395,12 @@ client_main(struct event_base *base, int argc, char **argv, int flags)
 	}
 
 	/* Send identify messages. */
-	/* 发送身份信息，不知道是怎么通过 proc_send 将消息发送出去的 */
+	/* 发送身份信息，ttyname 是当前进程标准输入的设备名字，cwd 是当前目录的路径名
+	 * 不知道是怎么通过 proc_send 将消息发送出去的 */
 	client_send_identify(ttynam, cwd);
 
 	/* Send first command. */
+	/* 一般地发送的第一个命令是 CMD_STARTSERVER */ 
 	if (msg == MSG_COMMAND) {
 		/* How big is the command? */
 		size = 0;
@@ -423,7 +433,9 @@ client_main(struct event_base *base, int argc, char **argv, int flags)
 		proc_send(client_peer, msg, -1, NULL, 0);
 
 	/* Start main loop. */
-	/* 循环倾听 event 事件 */
+	/* 循环倾听 event 事件
+	 * 正常情况下 parent 进程也就是 client 会一直在这个循环
+	 * */
 	proc_loop(client_proc, NULL);
 
 	/* Run command if user requested exec, instead of exiting. */
@@ -462,34 +474,45 @@ client_send_identify(const char *ttynam, const char *cwd)
 	const char	 *s;
 	char		**ss;
 	size_t		  sslen;
+	/* 一般情况，client_flags = CLIENT_UTF8 */
 	int		  fd, flags = client_flags;
 	pid_t		  pid;
 
 	/* fd 为什么是 -1？？？ */
 	proc_send(client_peer, MSG_IDENTIFY_FLAGS, -1, &flags, sizeof flags);
 
+	/* 获取 TERM 环境变量，发送给 server */
 	if ((s = getenv("TERM")) == NULL)
 		s = "";
 	proc_send(client_peer, MSG_IDENTIFY_TERM, -1, s, strlen(s) + 1);
 
+	/* 发送 tmux 进程的 stdin 描述符对应的终端设备名，格式 /dev/pts/[number] */
 	proc_send(client_peer, MSG_IDENTIFY_TTYNAME, -1, ttynam,
 	    strlen(ttynam) + 1);
+	/* 发送 tmux 执行时的工作路径 */
 	proc_send(client_peer, MSG_IDENTIFY_CWD, -1, cwd, strlen(cwd) + 1);
 
+	/* 复制一个标准输入句柄，赋值给 fd
+	 * 除了 flags 可以保持不一致，其他的可以认为是一致的，可互换的
+	 * */
 	if ((fd = dup(STDIN_FILENO)) == -1)
 		fatal("dup failed");
+	/* 将消息通过标准输入发送出去？？？ */
 	proc_send(client_peer, MSG_IDENTIFY_STDIN, fd, NULL, 0);
 
 	pid = getpid();
+	/* 发送 client 的 pid 给 server ？？？ 但是句柄为什么是 -1 呢？？？ */
 	proc_send(client_peer, MSG_IDENTIFY_CLIENTPID, -1, &pid, sizeof pid);
 
 	for (ss = environ; *ss != NULL; ss++) {
 		sslen = strlen(*ss) + 1;
 		if (sslen > MAX_IMSGSIZE - IMSG_HEADER_SIZE)
 			continue;
+		/* 发送环境变量给 server ？？？ */
 		proc_send(client_peer, MSG_IDENTIFY_ENVIRON, -1, *ss, sslen);
 	}
 
+	/* 标记身份信息已经发送完全  */
 	proc_send(client_peer, MSG_IDENTIFY_DONE, -1, NULL, 0);
 }
 

@@ -40,7 +40,10 @@
  * Main server functions.
  */
 
-/* 全局的 clients tail queue 类型 */
+/* 全局的 clients tail queue 类型
+ * server 通过 server_client_create 函数创建的
+ * 所有 client 实例都会在这里管理
+ * */
 struct clients		 clients;
 
 /* 保存作为服务端的 tmuxproc 实例指针 */

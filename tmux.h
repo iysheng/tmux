@@ -64,6 +64,7 @@ struct winlink;
 
 /* Default configuration files. */
 #ifndef TMUX_CONF
+/* 默认的配置文件搜索路径 */
 #define TMUX_CONF "/etc/tmux.conf:~/.tmux.conf"
 #endif
 
@@ -459,6 +460,7 @@ enum tty_code_code {
 enum msgtype {
 	MSG_VERSION = 12,
 
+	/* 身份认证消息类型组 */
 	MSG_IDENTIFY_FLAGS = 100,
 	MSG_IDENTIFY_TERM,
 	MSG_IDENTIFY_TTYNAME,
@@ -1465,6 +1467,7 @@ struct cmd_entry {
 	struct cmd_entry_flag	 source;
 	struct cmd_entry_flag	 target;
 
+/* 一般地 parent 进程认证完后，发送的第一个命令是 CMD_STARTSERVER */
 #define CMD_STARTSERVER 0x1
 #define CMD_READONLY 0x2
 #define CMD_AFTERHOOK 0x4
@@ -1526,6 +1529,7 @@ struct client {
 	struct cmdq_list queue;
 
 	pid_t		 pid;
+	/* dup 出来的 parent 的 stdin 描述符 */
 	int		 fd;
 	struct event	 event;
 	int		 retval;
@@ -1537,9 +1541,12 @@ struct client {
 	struct format_job_tree	*jobs;
 
 	char		*title;
+	/* 保存 tmux 执行时当前的目录  */
 	const char	*cwd;
 
+	/* 保存环境变量 TERM 的值 */
 	char		*term;
+	/* 保存 stdin 对应的终端的设备名字 */
 	char		*ttyname;
 	struct tty	 tty;
 
@@ -1595,6 +1602,7 @@ struct client {
 	(CLIENT_DEAD|		\
 	 CLIENT_SUSPENDED|	\
 	 CLIENT_DETACHING)
+	/* 保存传递的 client_flags， 一般地为 CLIENT_UTF8 */
 	int		 flags;
 	struct key_table *keytable;
 

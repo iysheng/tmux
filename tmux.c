@@ -185,7 +185,7 @@ find_cwd(void)
 	static char	 cwd[PATH_MAX];
 	const char	*pwd;
 
-	/* 获取当前工作路径的名字 */
+	/* 优先获取当前工作路径的名字 */
 	if (getcwd(cwd, sizeof cwd) == NULL)
 		return (NULL);
 	if ((pwd = getenv("PWD")) == NULL || *pwd == '\0')
@@ -357,6 +357,7 @@ main(int argc, char **argv)
 	global_options = options_create(NULL);
 	global_s_options = options_create(NULL);
 	global_w_options = options_create(NULL);
+	/* 遍历全局数组 options_table，根据不同的类型，添加到不同的 rbtree 节点管理 */
 	for (oe = options_table; oe->name != NULL; oe++) {
 		/* 如果是 server 类型的，赋值给管理 server 的 global_options */
 		if (oe->scope & OPTIONS_TABLE_SERVER)
