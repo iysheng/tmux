@@ -29,6 +29,7 @@
 
 #include "tmux.h"
 
+/* 这个是进程的抽象，主要标记了进程的名字，还有对应的 event 实例 */
 struct tmuxproc {
 	const char	 *name;
 	int		  exit;

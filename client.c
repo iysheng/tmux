@@ -287,7 +287,7 @@ client_main(struct event_base *base, int argc, char **argv, int flags)
 		/* 一般情况会走到这里 */
 		msg = MSG_COMMAND;
 		cmdflags = CMD_STARTSERVER;
-	} else {      CMD_
+	} else {
 		msg = MSG_COMMAND;
 
 		/*
@@ -307,8 +307,8 @@ client_main(struct event_base *base, int argc, char **argv, int flags)
 	}
 
 	/* Create client process structure (starts logging). */
-	/* 修改这个线程的名字为 "client"
-	 * 这个线程目前是 parent 进程  */
+	/* 修改这个进程的名字为 "client"
+	 * 这个进程目前是 parent 进程  */
 	client_proc = proc_start("client");
 	/* 设置这个线程处理信号的回调函数
 	 * 基于 libevent 框架，实际是注册对应信号的 event 的回调函数

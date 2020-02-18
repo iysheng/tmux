@@ -179,7 +179,7 @@ server_client_is_default_key_table(struct client *c, struct key_table *table)
 }
 
 /* Create a new client. */
-/* 创建一个新的 client */
+/* 创建一个新的 client，这个函数很重要！！！，我分析 client 对应的是 session */
 struct client *
 server_client_create(int fd)
 {

@@ -33,6 +33,7 @@ struct ibuf {
 	/* 描述下一次写数据的位置 */
 	size_t			 wpos;
 	size_t			 rpos;
+	/* 这个 fd 是做什么的？？？ */
 	int			 fd;
 };
 

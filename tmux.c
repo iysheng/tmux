@@ -416,7 +416,9 @@ main(int argc, char **argv)
 		}
 		exit(1);
 	}
-	/* 记录保存 socket path 的路径到全局变量 socket_path，这是第一阶段做的比较重要的事情 */
+	/* 记录保存 socket path 的路径到全局变量 socket_path，这是第一阶段做的比较重要的事情
+	 * 默认这个路径是 /tmp/tmux-1000/default
+	 * */
 	socket_path = path;
 	/* 释放 label 的内存空间，如果没有 -L 选项初始化，空释放 */
 	free(label);

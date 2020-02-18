@@ -48,6 +48,7 @@ struct clients		 clients;
 
 /* 保存作为服务端的 tmuxproc 实例指针 */
 struct tmuxproc		*server_proc;
+/* 保存 server 创建的 unix socket 句柄 */
 static int		 server_fd = -1;
 static int		 server_exit;
 static struct event	 server_ev_accept;
@@ -203,10 +204,10 @@ server_start(struct tmuxproc *client, struct event_base *base, int lockfd,
 	 * 处理进程
 	 * */
 	proc_clear_signals(client, 0);
-	/* fork 进程后，需要重新初始化 event_base */
+	/* fork 进程后，需要在 child 进程重新初始化 event_base */
 	if (event_reinit(base) != 0)
 		fatalx("event_reinit failed");
-	/* 修改线程的名字，申请一个 tmuxproc 实例内存空间
+	/* 修改进程的名字，申请一个 tmuxproc 实例内存空间
 	 * parent 进程对应的是 client 的 tmuxproc 实例，也就是全局变量 client_proc
 	 * 与之读应的 child 进程对应的是 server 的 tmuxproc 实例，也就是全局变量 server_proc
 	 * */
@@ -239,12 +240,14 @@ server_start(struct tmuxproc *client, struct event_base *base, int lockfd,
 	/* 保存启动时间信息 */
 	gettimeofday(&start_time, NULL);
 
+	/* 创建 unix socket ！！！ */
 	server_fd = server_create_socket(&cause);
 	if (server_fd != -1)
 		server_update_socket();
 	/* 倾听 pair[1] 的读 event ，即 parent 进程发送给 child 进程的消息 */
 	c = server_client_create(pair[1]);
 
+	/* 关闭并删除锁文件 */
 	if (lockfd >= 0) {
 		unlink(lockfile);
 		free(lockfile);
@@ -258,7 +261,9 @@ server_start(struct tmuxproc *client, struct event_base *base, int lockfd,
 		c->flags |= CLIENT_EXIT;
 	}
 
-	/* 添加 accept event 的回调函数 server_accept */
+	/* 添加 accept event 的回调函数 server_accept
+	 * 这里倾听的是根据路径 /tmp/tmux-1000/default 创建的 UNIX socket
+	 * */
 	server_add_accept(0);
 	/* 循环 event 倾听，这个循环不能退出 */
 	proc_loop(server_proc, server_loop);
