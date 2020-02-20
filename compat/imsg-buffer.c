@@ -266,6 +266,7 @@ msgbuf_write(struct msgbuf *msgbuf)
 	}
 
 again:
+	/* 实际在这个地方通过 UNIX 的本地 socket pair 发送出去消息 */
 	if ((n = sendmsg(msgbuf->fd, &msg, 0)) == -1) {
 		if (errno == EINTR)
 			goto again;

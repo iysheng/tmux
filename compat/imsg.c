@@ -35,11 +35,14 @@ static int	 imsg_get_fd(struct imsgbuf *);
 void
 imsg_init(struct imsgbuf *ibuf, int fd)
 {
+	/* 这里会初始化 ibuf->w->fd = -1 */
 	msgbuf_init(&ibuf->w);
 	memset(&ibuf->r, 0, sizeof(ibuf->r));
-	/* 初始化这个 ibuf 的 fd */
+	/* 初始化这个 ibuf 的 fd ！！！
+	 * 这个 fd 只会初始化一次，很重要 ！！！
+	 * */
 	ibuf->fd = fd;
-	/* 初始化这个 ibuf 的 w 的 fd */
+	/* 初始化这个 ibuf->w->fd */
 	ibuf->w.fd = fd;
 	ibuf->pid = getpid();
 	TAILQ_INIT(&ibuf->fds);
