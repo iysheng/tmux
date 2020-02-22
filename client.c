@@ -101,6 +101,7 @@ client_get_lock(char *lockfile)
 }
 
 /* Connect client to server. */
+/* 连接客户端到服务器 */
 static int
 client_connect(struct event_base *base, const char *path, int start_server)
 {
@@ -311,7 +312,7 @@ client_main(struct event_base *base, int argc, char **argv, int flags)
 	 * 这个进程目前是 parent 进程  */
 	client_proc = proc_start("client");
 	/* 设置这个线程处理信号的回调函数
-	 * 基于 libevent 框架，实际是注册对应信号的 event 的回调函数
+	 * 基于 libevent 框架，实际是注册对应信号的 event 的回调函数为 client_signal
 	 * */
 	proc_set_signals(client_proc, client_signal);
 
@@ -329,9 +330,10 @@ client_main(struct event_base *base, int argc, char **argv, int flags)
 		return (1);
 	}
 	/* 添加这个和 child 进程，也可以认为就是 server 端
-	 * 通讯的 socket 句柄的回调函数 client_dispatch
+	 * 通讯的 socket 句柄的回调函数 client_dispatch ！！！
 	 * 返回一个 tmuxpeer 实例指针，通过这个指针，可以找到对应的 fd 句柄
-	 * 通过发消息给该句柄，可以发送消息给 server
+	 * 通过发消息给该句柄，可以发送消息给 server，绑定这个 client 有 event
+	 * 事件发生时，回调函数 client_dispatch
 	 * */
 	client_peer = proc_add_peer(client_proc, fd, client_dispatch, NULL);
 
@@ -342,9 +344,9 @@ client_main(struct event_base *base, int argc, char **argv, int flags)
 	/* 获取当前进程标准输入使用的终端名字，测试打印的格式是 /dev/pts/[number] 数字
 	 * 这个 number 会随着打开终端的个数增加而增加
 	 * ptmx, pts - pseudoterminal master and slave，/deb/ptmx 是一个字符设备，通常用来
-	 * 创建伪终端的 master 和 slave 对，进程每打开一次 /dev/ptmx，都会获取一个独立的 ptm 的描述符
-	 * ，同时也会在 /dev/pts 目录创建一个对应的 pts 设备，可以将返回的 ptm 描述符作为参数
-	 * 传递给函数 ptsname，获取对应的 pts 设备名字
+	 * 创建伪终端的 master 和 slave 对，进程每打开一次 /dev/ptmx，都会获取一个独立的
+	 * ptm 的描述符，同时也会在 /dev/pts 目录创建一个对应的 pts 设备，可以将返回
+	 * 的 ptm 描述符作为参数传递给函数 ptsname，获取对应的 pts 设备名字
 	 * */
 	if ((ttynam = ttyname(STDIN_FILENO)) == NULL)
 		ttynam = "";
@@ -366,7 +368,7 @@ client_main(struct event_base *base, int argc, char **argv, int flags)
 	/* Free stuff that is not used in the client. */
 	if (ptm_fd != -1)
 		close(ptm_fd);
-	/* 释放 client 一些不需要的变量的内存空间 */
+	/* 释放 client 端一些不需要的变量的内存空间 */
 	options_free(global_options);
 	options_free(global_s_options);
 	options_free(global_w_options);
@@ -400,7 +402,8 @@ client_main(struct event_base *base, int argc, char **argv, int flags)
 	client_send_identify(ttynam, cwd);
 
 	/* Send first command. */
-	/* 一般地发送的第一个命令是 CMD_STARTSERVER */ 
+	/* 一般地 msg == MSG_COMMAND
+	 * 并且发送的第一个命令是 CMD_STARTSERVER */ 
 	if (msg == MSG_COMMAND) {
 		/* How big is the command? */
 		size = 0;
@@ -462,6 +465,7 @@ client_main(struct event_base *base, int argc, char **argv, int flags)
 		tcsetattr(STDOUT_FILENO, TCSAFLUSH, &saved_tio);
 	} else if (client_exitreason != CLIENT_EXIT_NONE)
 		fprintf(stderr, "%s\n", client_exit_message());
+	/* 阻塞 client 的 stdio ，当无输入时，阻塞而不是返回 EAGAIN */
 	setblocking(STDIN_FILENO, 1);
 	return (client_exitval);
 }

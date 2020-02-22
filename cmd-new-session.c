@@ -36,6 +36,7 @@
 static enum cmd_retval	cmd_new_session_exec(struct cmd *, struct cmdq_item *);
 
 const struct cmd_entry cmd_new_session_entry = {
+	/* 创建 session 的命令 entry 实例 */
 	.name = "new-session",
 	.alias = "new",
 
@@ -258,6 +259,7 @@ cmd_new_session_exec(struct cmd *self, struct cmdq_item *item)
 	env = environ_create();
 	if (c != NULL && !args_has(args, 'E'))
 		environ_update(global_s_options, c->environ, env);
+	/* 创建 session */
 	s = session_create(prefix, newname, cwd, env, oo, tiop);
 
 	/* Spawn the initial window. */

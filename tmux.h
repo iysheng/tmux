@@ -1524,6 +1524,7 @@ typedef int (*overlay_key_cb)(struct client *, struct key_event *);
 typedef void (*overlay_free_cb)(struct client *);
 struct client {
 	const char	*name;
+	/* 关联 tmuxpeer 实例 */
 	struct tmuxpeer	*peer;
 	/* 保存命令的 tail queue */
 	struct cmdq_list queue;

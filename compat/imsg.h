@@ -76,6 +76,8 @@ struct imsgbuf {
 	struct ibuf_read	 r;
 	/* 这个是管理写消息的管理实例
 	 * 发送的消息都会添加到这个 struct msgbuf 管理的 struct ibuf 实例
+	 * 在通过系统调用 sendmsg 发送消息到 socket 时，会将该消息填充到
+	 * struct msgbuf 实例
 	 * */
 	struct msgbuf		 w;
 	/* 读写该消息的句柄 */

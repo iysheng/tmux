@@ -48,9 +48,11 @@ struct clients		 clients;
 
 /* 保存作为服务端的 tmuxproc 实例指针 */
 struct tmuxproc		*server_proc;
-/* 保存 server 创建的 unix socket 句柄 */
+/* 保存 server 创建的 unix socket 句柄，该句柄在服务端，监听 client 的链接
+ * 板定的是路径 socket_path，一般地路径是 /tmp/tmux-1000/default */
 static int		 server_fd = -1;
 static int		 server_exit;
+/* 倾听 server_fd 对应的 socket 的 accept 事件 */
 static struct event	 server_ev_accept;
 
 struct cmd_find_state	 marked_pane;
@@ -175,6 +177,7 @@ server_start(struct tmuxproc *client, struct event_base *base, int lockfd,
 	sigfillset(&set);
 	/* 阻塞所有的信号 */
 	sigprocmask(SIG_BLOCK, &set, &oldset);
+	/* 创建新的进程 */
 	switch (fork()) {
 	case -1:
 		fatal("fork failed");
@@ -240,11 +243,19 @@ server_start(struct tmuxproc *client, struct event_base *base, int lockfd,
 	/* 保存启动时间信息 */
 	gettimeofday(&start_time, NULL);
 
-	/* 创建 unix socket ！！！ */
+	/* 根据之前初始化的全局变量 socket_path 保存的 socket 的路径，
+	 * 创建 unix socket ！！！ */
 	server_fd = server_create_socket(&cause);
 	if (server_fd != -1)
+		/* 修改了 socket_path 文件的权限 */
 		server_update_socket();
-	/* 倾听 pair[1] 的读 event ，即 parent 进程发送给 child 进程的消息 */
+	/* 倾听 pair[1] 的读 event ，即 parent 进程发送给 child 进程的消息
+	 * 这是创建的第一个 client ！！！ 倾听的是和 parent 进程作为 client 端
+	 * 的 socket pair，在创建这个 client 后，已经添加到全局变量 clients 管理
+	 * 的 tailq 了
+	 * server 在创建 client 的同时，会同步创建一个 tmuxpeer，将这个 tmuxpeer 关联
+	 * 到 client 实例
+	 * */
 	c = server_client_create(pair[1]);
 
 	/* 关闭并删除锁文件 */
@@ -254,7 +265,7 @@ server_start(struct tmuxproc *client, struct event_base *base, int lockfd,
 		close(lockfd);
 	}
 
-	/* 如果出错了 */
+	/* 如果绑定本地的 server socket 出错了 */
 	if (cause != NULL) {
 		cmdq_append(c, cmdq_get_error(cause));
 		free(cause);
@@ -265,7 +276,16 @@ server_start(struct tmuxproc *client, struct event_base *base, int lockfd,
 	 * 这里倾听的是根据路径 /tmp/tmux-1000/default 创建的 UNIX socket
 	 * */
 	server_add_accept(0);
-	/* 循环 event 倾听，这个循环不能退出 */
+	/* 循环 event 倾听，这个循环不能退出
+	 * 目前位置，系统存在两个 struct tmux_proc 分别是 client 和  server
+	 * 对应的存在两个 struct tmux_peer ，分别是 client 和 server ，
+	 * 这两个 tmux_peer 关联的 fd 是 socketpair 创建出来的两个 socket
+	 * 还有一个 server_ev_accept event，倾听的是 server_fd 对应的是 UNIX socket，绑定
+	 * 的路径是 /tmp/tmux-1000/default
+	 * */
+	/* 有任何 event 事件发生，都会执行 server_loop 回调函数
+	 * 正常情况下，server 进程会一直循环在这个函数！！！
+	 * */
 	proc_loop(server_proc, server_loop);
 
 	job_kill_all();
@@ -276,7 +296,7 @@ server_start(struct tmuxproc *client, struct event_base *base, int lockfd,
 
 /* Server loop callback. */
 /* 服务端的循环回调函数
- * 目前直到的服务端循环倾听两个句柄
+ * 目前知道的服务端循环倾听两个句柄
  * 1. 服务端创建的 socket，等待 client 的链接
  * 2. child 进程和 parent 进程通讯的 socket peer，child 使用的是 pair[1]，parent 使用的是 pair[0]
  * */
@@ -382,6 +402,7 @@ server_update_socket(void)
 			if (mode & S_IROTH)
 				mode |= S_IXOTH;
 		} else
+			/* 取消所有的不可以执行权限 */
 			mode &= ~(S_IXUSR|S_IXGRP|S_IXOTH);
 		/* 修改 socket 的权限 */
 		chmod(socket_path, mode);
@@ -389,7 +410,9 @@ server_update_socket(void)
 }
 
 /* Callback for server socket. */
-/* 服务端 socket accept 事件的回调函数 */
+/* 服务端 socket accept 事件的回调函数
+ * 倾听的 fd 绑定的是 UNIX socket，路径是 /tmp/tmux-1000/default
+ * */
 static void
 server_accept(int fd, short events, __unused void *data)
 {
@@ -425,6 +448,10 @@ server_accept(int fd, short events, __unused void *data)
  * Add accept event. If timeout is nonzero, add as a timeout instead of a read
  * event - used to backoff when running out of file descriptors.
  */
+/*
+ * 添加 accept event， 如果 timeout 不为 0, 添加一个 timeout event
+ * 一般地， timeout 都是 0
+ * */
 void
 server_add_accept(int timeout)
 {
@@ -439,7 +466,8 @@ server_add_accept(int timeout)
 
 	if (timeout == 0) {
 		/* 初始化这个事件的 accept 回调函数为 server_accept
-		 * 并且初始化这个 event 关联到默认的 event_base，应该就是当前进程唯一的 event_base
+		 * 并且初始化这个 event 关联到默认的 event_base，应该就是当前进程唯一
+		 * 的 event_base
 		 * */
 		event_set(&server_ev_accept, server_fd, EV_READ, server_accept,
 		    NULL);

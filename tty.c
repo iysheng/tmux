@@ -257,6 +257,7 @@ tty_write_callback(__unused int fd, __unused short events, void *data)
 		event_add(&tty->event_out, NULL);
 }
 
+/* 倾听 stdin 的读事件！！！ */
 int
 tty_open(struct tty *tty, char **cause)
 {
@@ -269,12 +270,14 @@ tty_open(struct tty *tty, char **cause)
 
 	tty->flags &= ~(TTY_NOCURSOR|TTY_FREEZE|TTY_BLOCK|TTY_TIMER);
 
+	/* 倾听 tty 读事件 */
 	event_set(&tty->event_in, tty->fd, EV_PERSIST|EV_READ,
 	    tty_read_callback, tty);
 	tty->in = evbuffer_new();
 	if (tty->in == NULL)
 		fatal("out of memory");
 
+	/* 倾听 tty 写事件 */
 	event_set(&tty->event_out, tty->fd, EV_WRITE, tty_write_callback, tty);
 	tty->out = evbuffer_new();
 	if (tty->out == NULL)

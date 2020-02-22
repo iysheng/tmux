@@ -185,7 +185,9 @@ server_client_create(int fd)
 {
 	struct client	*c;
 
-	/* 修改为非阻塞态 */
+	/* 修改 socket 为非阻塞态
+	 * socket pair 的 socket 是非阻塞态
+	 * */
 	setblocking(fd, 0);
 
 	/* 重新申请一个 client 实例内存空间 */
@@ -199,6 +201,8 @@ server_client_create(int fd)
 	 * 之后，server 端创建的 client 实例，倾听的都是函数
 	 * server_accept 新创建出来的 socket ？？？
 	 * parent 进程对应的是 client_peer
+	 * server 每创建一个 client ，会同步创建一个 tmuxpeer，在创建 tmuxpeer 的
+	 * 时候，会注册对应的 event 倾听 fd ！！！
 	 * */
 	c->peer = proc_add_peer(server_proc, fd, server_client_dispatch, c);
 
@@ -273,6 +277,7 @@ server_client_open(struct client *c, char **cause)
 		return (-1);
 	}
 
+	/* 倾听 tty stdin 事件 */
 	if (tty_open(&c->tty, cause) != 0)
 		return (-1);
 
@@ -1724,7 +1729,9 @@ server_client_set_title(struct client *c)
 }
 
 /* Dispatch message from client. */
-/* 分发接收到的 client 发送的消息！！！ */
+/* 分发通过 socket pair 接收到的 client 发送的消息！！！
+ * 这个回调函数完全就是处理接收消息
+ * */
 static void
 server_client_dispatch(struct imsg *imsg, void *arg)
 {
@@ -1758,6 +1765,7 @@ server_client_dispatch(struct imsg *imsg, void *arg)
 		server_client_dispatch_identify(c, imsg);
 		break;
 	case MSG_COMMAND:
+		/* client 端发送的命令 */
 		server_client_dispatch_command(c, imsg);
 		break;
 	case MSG_RESIZE:
@@ -1835,6 +1843,7 @@ server_client_command_done(struct cmdq_item *item, __unused void *data)
 }
 
 /* Handle command message. */
+/* 处理 client 发送的 MSG_COMMAND 类型的消息，这里派发具体的命令 */
 static void
 server_client_dispatch_command(struct client *c, struct imsg *imsg)
 {

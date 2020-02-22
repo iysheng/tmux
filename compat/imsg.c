@@ -84,6 +84,7 @@ again:
 		return (-1);
 	}
 
+	/* 尝试获取 socket pair 的消息 */
 	if ((n = recvmsg(ibuf->fd, &msg, 0)) == -1) {
 		if (errno == EINTR)
 			goto again;
@@ -274,7 +275,9 @@ imsg_close(struct imsgbuf *ibuf, struct ibuf *msg)
 	hdr = (struct imsg_hdr *)msg->buf;
 
 	hdr->flags &= ~IMSGF_HASFD;
-	/* 如果不是 -1 的话，就标记这个 msg 的头部置位 IMSGF_HASFD */
+	/* 如果不是 -1 的话，就标记这个 msg 的头部置位 IMSGF_HASFD
+	 * 标记这个 imsg 具有 fd 句柄
+	 * */
 	if (msg->fd != -1)
 		hdr->flags |= IMSGF_HASFD;
 

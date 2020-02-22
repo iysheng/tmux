@@ -225,6 +225,7 @@ msgbuf_clear(struct msgbuf *msgbuf)
 		ibuf_dequeue(msgbuf, buf);
 }
 
+/* 将消息通过 socket pair 发送出去， 系统调用 senmsg */
 int
 msgbuf_write(struct msgbuf *msgbuf)
 {
@@ -232,6 +233,7 @@ msgbuf_write(struct msgbuf *msgbuf)
 	struct ibuf	*buf;
 	unsigned int	 i = 0;
 	ssize_t		 n;
+	/* sendmsg 系统调用发送消息的实例抽象 */
 	struct msghdr	 msg;
 	struct cmsghdr	*cmsg;
 	union {
@@ -266,7 +268,9 @@ msgbuf_write(struct msgbuf *msgbuf)
 	}
 
 again:
-	/* 实际在这个地方通过 UNIX 的本地 socket pair 发送出去消息 */
+	/* 实际在这个地方通过 UNIX 的本地 socket pair 发送出去消息
+	 * 通过指定的 msgbuf 的 fd 发送出去，这个值在创建 tmuxpeer 的时候确定
+	 * */
 	if ((n = sendmsg(msgbuf->fd, &msg, 0)) == -1) {
 		if (errno == EINTR)
 			goto again;
@@ -284,11 +288,13 @@ again:
 	 * assumption: fd got sent if sendmsg sent anything
 	 * this works because fds are passed one at a time
 	 */
+	/* 如果这个 buf 的 fd 不为 -1，需要关闭这个 fd */
 	if (buf != NULL && buf->fd != -1) {
 		close(buf->fd);
 		buf->fd = -1;
 	}
 
+	/* 清除发送出去的消息记录 */
 	msgbuf_drain(msgbuf, n);
 
 	return (1);

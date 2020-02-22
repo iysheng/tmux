@@ -42,6 +42,7 @@ struct options	*global_w_options;	/* window options */
 struct environ	*global_environ;
 
 struct timeval	 start_time;
+/* 保存了一个有名的本地 socket 的路径，一般是 /tmp/tmux-1000/default ，这个 1000 是 uid */
 const char	*socket_path;
 int		 ptm_fd = -1;
 const char	*shell_command;
@@ -164,6 +165,7 @@ fail:
 	return (NULL);
 }
 
+/* 设置 fd 是否阻塞 */
 void
 setblocking(int fd, int state)
 {
@@ -173,6 +175,7 @@ setblocking(int fd, int state)
 		if (!state)
 			mode |= O_NONBLOCK;
 		else
+			/* 设置位阻塞态 */
 			mode &= ~O_NONBLOCK;
 		fcntl(fd, F_SETFL, mode);
 	}

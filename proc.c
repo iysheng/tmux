@@ -29,9 +29,10 @@
 
 #include "tmux.h"
 
-/* 这个是进程的抽象，主要标记了进程的名字，还有对应的 event 实例 */
+/* 这个是进程的抽象，主要标记了进程的名字，还有该进程对应的信号的 event 实例 */
 struct tmuxproc {
 	const char	 *name;
+	/* 这个是保存这个 tmuxproc 的退出码的？？？ */
 	int		  exit;
 
 	/* 定义的 event 实例，实际发生时会通过 proc_signal_cb
@@ -56,6 +57,7 @@ struct tmuxpeer {
 
 	/* 描述消息的实例，这个结构体包含了 fd 句柄 */
 	struct imsgbuf	 ibuf;
+	/* 这个 event 很重要，是 struct tmuxpeer  ！！！ */
 	struct event	 event;
 
 	int		 flags;
@@ -69,7 +71,8 @@ struct tmuxpeer {
 static int	peer_check_version(struct tmuxpeer *, struct imsg *);
 static void	proc_update_event(struct tmuxpeer *);
 
-/* event 的回调函数，实际执行的是 peer 的 dispatchcb 回调函数 */
+/* struct tmux_peer 关联的 event 的回调函数，实际执行的是
+ * peer 的 dispatchcb 回调函数 */
 static void
 proc_event_cb(__unused int fd, short events, void *arg)
 {
@@ -77,14 +80,19 @@ proc_event_cb(__unused int fd, short events, void *arg)
 	ssize_t		 n;
 	struct imsg	 imsg;
 
-	if (!(peer->flags & PEER_BAD) && (events & EV_READ)) {
+	if (!(peer->flage & PEER_BAD) && (events & EV_READ)) {
+		/* 尝试从 socket pair 读取消息 */
 		if (((n = imsg_read(&peer->ibuf)) == -1 && errno != EAGAIN) ||
 		    n == 0) {
-			/* 实际执行的是 peer 的 dispatchcb 回调函数 */
+			/* 实际执行的是 struct tmuxpeer 的 dispatchcb 回调函数
+			 * client_dispatch
+			 * */
 			peer->dispatchcb(NULL, peer->arg);
 			return;
 		}
+		/* 循环处理接收到的消息 */
 		for (;;) {
+			/* 如果没有消息了就返回 */
 			if ((n = imsg_get(&peer->ibuf, &imsg)) == -1) {
 				peer->dispatchcb(NULL, peer->arg);
 				return;
@@ -105,6 +113,7 @@ proc_event_cb(__unused int fd, short events, void *arg)
 		}
 	}
 
+	/* 如果是 write 事件 */
 	if (events & EV_WRITE) {
 		if (msgbuf_write(&peer->ibuf.w) <= 0 && errno != EAGAIN) {
 			peer->dispatchcb(NULL, peer->arg);
@@ -156,6 +165,9 @@ proc_update_event(struct tmuxpeer *peer)
 	events = EV_READ;
 	/* 如果有消息要发送 */
 	if (peer->ibuf.w.queued > 0)
+		/* 当倾听的句柄允许 write 时，就会将消息发送出去！！！
+		 * 允许 write ，而不是说有数据写到对应的句柄 ！！！
+		 * */
 		events |= EV_WRITE;
 	/* 重新初始化这个 event
 	 * 这里比上次可能会允许写事件， 这个 peer->ibuf.fd 还是上次传递的 fd
@@ -163,7 +175,10 @@ proc_update_event(struct tmuxpeer *peer)
 	 * */
 	event_set(&peer->event, peer->ibuf.fd, events, proc_event_cb, peer);
 
-	/* 添加这个 event */
+	/* 添加这个 event，理论情况，当添加这个 event，并且已经倾听了 EV_WRITE 事件，
+	 * 那么就会执行对应的回调函数， proc_event_cb，在这个回调函数，会将消息通过
+	 * socket pair 将消息发送给 server， 也就是 child 进程 ！！！
+	/* */
 	event_add(&peer->event, NULL);
 }
 
@@ -184,11 +199,12 @@ proc_send(struct tmuxpeer *peer, enum msgtype type, int fd, const void *buf,
 	 * 关联这个 fd 到 ibuf
 	 * PROROCOL_VERSION 是 imsg_compose 的 peerid
 	 * pid = -1
-	 * fd 是句柄
+	 * fd 是句柄，发送认证消息的时候，句柄是 -1
 	 * vp 是消息内容
 	 * len 是消息的长度
 	 * */
-	/* 将需要发送的消息，包括消息类型，添加到 ibuf 通过 struct msgbuf w 管理的 wbuf tailqueue  */
+	/* 将需要发送的消息，包括消息类型，添加到 struct imsgbuf ibuf 通过
+	 * struct msgbuf w 管理的 struct ibuf tailqueue */
 	retval = imsg_compose(ibuf, type, PROTOCOL_VERSION, -1, fd, vp, len);
 	if (retval != 1)
 		return (-1);
@@ -311,6 +327,7 @@ proc_clear_signals(struct tmuxproc *tp, int defaults)
 	}
 }
 
+/* 根据 struct tmuxproc 实例，创建一个 tmuxpeer 实例 */
 struct tmuxpeer *
 proc_add_peer(struct tmuxproc *tp, int fd,
     void (*dispatchcb)(struct imsg *, void *), void *arg)
@@ -319,16 +336,19 @@ proc_add_peer(struct tmuxproc *tp, int fd,
 
 	peer = xcalloc(1, sizeof *peer);
 	/* 给这个 tmuxpeer 的 parent 成员赋值对应的 tmuxproc 实例指针
-	 * 表示该 tmuxpeer 属于哪个 tmuxproc */
+	 * 表示该 tmuxpeer 属于哪个 tmuxproc
+	 * 分析单个 tmux 启动只会创建两个 tmuxproc， server 和 client
+	 * */
 	peer->parent = tp;
 
 	/* 有事件发生时，执行的函数和参数 */
 	peer->dispatchcb = dispatchcb;
 	peer->arg = arg;
 
-	/* 初始化句柄给读和写的管理结构体？？？ */
+	/* 初始化句柄给读和写的管理结构体，并且关联 fd 到 struct tmuxpeer 的 ibuf
+	 * 管理实例和对应的写缓冲区的管理结构体 */
 	imsg_init(&peer->ibuf, fd);
-	/* 初始化一个 event，关联的是 fd，回调函数是 proc_event_cb */
+	/* 初始化 struct tmuxpeer 的 event，关联的是 fd，回调函数是 proc_event_cb */
 	event_set(&peer->event, fd, EV_READ, proc_event_cb, peer);
 
 	log_debug("add peer %p: %d (%p)", peer, fd, arg);
