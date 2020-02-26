@@ -397,13 +397,14 @@ client_main(struct event_base *base, int argc, char **argv, int flags)
 	}
 
 	/* Send identify messages. */
-	/* 发送身份信息，ttyname 是当前进程标准输入的设备名字，cwd 是当前目录的路径名
+	/* 发送身份信息，ttyname 是当前进程标准输入的设备名字，格式是 /dev/pts/[x]
+	 * cwd 是当前目录的路径名
 	 * 不知道是怎么通过 proc_send 将消息发送出去的 */
 	client_send_identify(ttynam, cwd);
 
 	/* Send first command. */
 	/* 一般地 msg == MSG_COMMAND
-	 * 并且发送的第一个命令是 CMD_STARTSERVER */ 
+	 * 并且 cmdflags 为 CMD_STARTSERVER */ 
 	if (msg == MSG_COMMAND) {
 		/* How big is the command? */
 		size = 0;
@@ -425,7 +426,10 @@ client_main(struct event_base *base, int argc, char **argv, int flags)
 		size += sizeof *data;
 
 		/* Send the command. */
-		/* 这里的 fd 为什么是 -1 */
+		/* 这里的 fd 为什么是 -1？
+		 * 通过 socket pair 发送给 child 进程，对应的是服务端
+		 * 纵使这里 argc == 0，服务端也会修正为 new-session
+		 * */
 		if (proc_send(client_peer, msg, -1, data, size) != 0) {
 			fprintf(stderr, "failed to send command\n");
 			free(data);
@@ -501,11 +505,11 @@ client_send_identify(const char *ttynam, const char *cwd)
 	 * */
 	if ((fd = dup(STDIN_FILENO)) == -1)
 		fatal("dup failed");
-	/* 将消息通过标准输入发送出去？？？ */
+	/* 将消息通过创建出来的两个 socket pair 通信，发送给 server，也就是 child 进程 */
 	proc_send(client_peer, MSG_IDENTIFY_STDIN, fd, NULL, 0);
 
 	pid = getpid();
-	/* 发送 client 的 pid 给 server ？？？ 但是句柄为什么是 -1 呢？？？ */
+	/* 发送 client 的 pid 给 server */
 	proc_send(client_peer, MSG_IDENTIFY_CLIENTPID, -1, &pid, sizeof pid);
 
 	for (ss = environ; *ss != NULL; ss++) {
