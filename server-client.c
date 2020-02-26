@@ -1907,7 +1907,9 @@ error:
 }
 
 /* Handle identify message. */
-/* 处理认证相关的消息类型 */
+/* 处理认证相关的消息类型
+ * 都是初始化 client 这个结构体实例的相关成员
+ * */
 static void
 server_client_dispatch_identify(struct client *c, struct imsg *imsg)
 {
@@ -1926,6 +1928,7 @@ server_client_dispatch_identify(struct client *c, struct imsg *imsg)
 	case MSG_IDENTIFY_FLAGS:
 		if (datalen != sizeof flags)
 			fatalx("bad MSG_IDENTIFY_FLAGS size");
+		/* 默认的 flags 标志，一般地没有额外配置的默认值是 CLIENT_UTF8 */
 		memcpy(&flags, data, sizeof flags);
 		c->flags |= flags;
 		log_debug("client %p IDENTIFY_FLAGS %#x", c, flags);
@@ -1933,13 +1936,16 @@ server_client_dispatch_identify(struct client *c, struct imsg *imsg)
 	case MSG_IDENTIFY_TERM:
 		if (datalen == 0 || data[datalen - 1] != '\0')
 			fatalx("bad MSG_IDENTIFY_TERM string");
+		/* 初始化 term 终端名字，这个值来源环境变量 TERM */
 		c->term = xstrdup(data);
 		log_debug("client %p IDENTIFY_TERM %s", c, data);
 		break;
 	case MSG_IDENTIFY_TTYNAME:
 		if (datalen == 0 || data[datalen - 1] != '\0')
 			fatalx("bad MSG_IDENTIFY_TTYNAME string");
-		/* 获取到 parent 进程发送的 stdin 的设备名字 */
+		/* 获取到 parent 进程发送的 stdin 的设备名字
+		 * 名字是 /dev/pts/[x]
+		 * */
 		c->ttyname = xstrdup(data);
 		log_debug("client %p IDENTIFY_TTYNAME %s", c, data);
 		break;
@@ -1965,6 +1971,7 @@ server_client_dispatch_identify(struct client *c, struct imsg *imsg)
 	case MSG_IDENTIFY_ENVIRON:
 		if (datalen == 0 || data[datalen - 1] != '\0')
 			fatalx("bad MSG_IDENTIFY_ENVIRON string");
+		/* parent 进程传递的环境变量 */
 		if (strchr(data, '=') != NULL)
 			environ_put(c->environ, data);
 		log_debug("client %p IDENTIFY_ENVIRON %s", c, data);
@@ -1972,6 +1979,7 @@ server_client_dispatch_identify(struct client *c, struct imsg *imsg)
 	case MSG_IDENTIFY_CLIENTPID:
 		if (datalen != sizeof c->pid)
 			fatalx("bad MSG_IDENTIFY_CLIENTPID size");
+		/* 记录 parent 进程的 pid 号 */
 		memcpy(&c->pid, data, sizeof c->pid);
 		log_debug("client %p IDENTIFY_CLIENTPID %ld", c, (long)c->pid);
 		break;
@@ -1989,6 +1997,7 @@ server_client_dispatch_identify(struct client *c, struct imsg *imsg)
 		name = xstrdup(c->ttyname);
 	else
 		xasprintf(&name, "client-%ld", (long)c->pid);
+	/* 使用 ttyname 或者 client-%ld 来初始化为这个 client 的 name */
 	c->name = name;
 	log_debug("client %p name is %s", c, c->name);
 

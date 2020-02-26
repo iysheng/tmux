@@ -501,11 +501,11 @@ client_send_identify(const char *ttynam, const char *cwd)
 	 * */
 	if ((fd = dup(STDIN_FILENO)) == -1)
 		fatal("dup failed");
-	/* 将消息通过标准输入发送出去？？？ */
+	/* 将消息通过创建出来的两个 socket pair 通信，发送给 server，也就是 child 进程 */
 	proc_send(client_peer, MSG_IDENTIFY_STDIN, fd, NULL, 0);
 
 	pid = getpid();
-	/* 发送 client 的 pid 给 server ？？？ 但是句柄为什么是 -1 呢？？？ */
+	/* 发送 client 的 pid 给 server */
 	proc_send(client_peer, MSG_IDENTIFY_CLIENTPID, -1, &pid, sizeof pid);
 
 	for (ss = environ; *ss != NULL; ss++) {
