@@ -1526,7 +1526,7 @@ struct client {
 	const char	*name;
 	/* 关联 tmuxpeer 实例 */
 	struct tmuxpeer	*peer;
-	/* 保存命令的 tail queue */
+	/* 保存该 client 发送的命令的 tail queue */
 	struct cmdq_list queue;
 
 	pid_t		 pid;

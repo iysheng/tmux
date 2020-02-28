@@ -280,6 +280,7 @@ client_main(struct event_base *base, int argc, char **argv, int flags)
 	client_flags = flags;
 
 	/* Set up the initial command. */
+	/* 建立初始化的命令 */
 	cmdflags = 0;
 	if (shell_command != NULL) {
 		msg = MSG_SHELL;
@@ -403,7 +404,7 @@ client_main(struct event_base *base, int argc, char **argv, int flags)
 
 	/* Send first command. */
 	/* 一般地 msg == MSG_COMMAND
-	 * 并且发送的第一个命令是 CMD_STARTSERVER */ 
+	 * 并且发送的第一个命令是的 cmdflags CMD_STARTSERVER */ 
 	if (msg == MSG_COMMAND) {
 		/* How big is the command? */
 		size = 0;
@@ -416,6 +417,7 @@ client_main(struct event_base *base, int argc, char **argv, int flags)
 		data = xmalloc((sizeof *data) + size);
 
 		/* Prepare command for server. */
+		/* 打包构造通过 socket pair 传递给 client 的 socket */
 		data->argc = argc;
 		if (cmd_pack_argv(argc, argv, (char *)(data + 1), size) != 0) {
 			fprintf(stderr, "command too long\n");

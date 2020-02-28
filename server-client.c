@@ -1765,7 +1765,11 @@ server_client_dispatch(struct imsg *imsg, void *arg)
 		server_client_dispatch_identify(c, imsg);
 		break;
 	case MSG_COMMAND:
-		/* client 端发送的命令 */
+		/* client 端发送的命令类型的消息
+		 * 在最初的 client，也就是 parent 进程
+		 * 发送过 identify 认证类消息后，就会发送 MSG_COMMAND 类的消息
+		 * 对应的 cmdflags 为 CMD_STARTSERVER
+		 * */
 		server_client_dispatch_command(c, imsg);
 		break;
 	case MSG_RESIZE:
@@ -1866,6 +1870,7 @@ server_client_dispatch_command(struct client *c, struct imsg *imsg)
 	if (len > 0 && buf[len - 1] != '\0')
 		fatalx("bad MSG_COMMAND string");
 
+	/* 获取 argc 的值，一般地为 0 */
 	argc = data.argc;
 	if (cmd_unpack_argv(buf, len, argc, &argv) != 0) {
 		cause = xstrdup("command too long");
@@ -1874,10 +1879,12 @@ server_client_dispatch_command(struct client *c, struct imsg *imsg)
 
 	if (argc == 0) {
 		argc = 1;
+		/* 如果没有特殊命令，那么构造这个命令为 new-session */
 		argv = xcalloc(1, sizeof *argv);
 		*argv = xstrdup("new-session");
 	}
 
+	/* 解析这个命令，查找这个命令对应的 cmd_parse_result 实例 */
 	pr = cmd_parse_from_arguments(argc, argv, NULL);
 	switch (pr->status) {
 	case CMD_PARSE_EMPTY:
@@ -1886,11 +1893,13 @@ server_client_dispatch_command(struct client *c, struct imsg *imsg)
 	case CMD_PARSE_ERROR:
 		cause = pr->error;
 		goto error;
+	/* 如果找到了匹配的命令，那么跳出，准备执行 */
 	case CMD_PARSE_SUCCESS:
 		break;
 	}
 	cmd_free_argv(argc, argv);
 
+	/* 追加到全局的 */
 	cmdq_append(c, cmdq_get_command(pr->cmdlist, NULL, NULL, 0));
 	cmdq_append(c, cmdq_get_callback(server_client_command_done, NULL));
 
