@@ -1877,6 +1877,7 @@ server_client_dispatch_command(struct client *c, struct imsg *imsg)
 		goto error;
 	}
 
+	/* 如果传递的参数为 0，修正为创建一个 new-session 的命令 */
 	if (argc == 0) {
 		argc = 1;
 		/* 如果没有特殊命令，那么构造这个命令为 new-session */

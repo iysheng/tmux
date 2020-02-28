@@ -398,7 +398,8 @@ client_main(struct event_base *base, int argc, char **argv, int flags)
 	}
 
 	/* Send identify messages. */
-	/* 发送身份信息，ttyname 是当前进程标准输入的设备名字，cwd 是当前目录的路径名
+	/* 发送身份信息，ttyname 是当前进程标准输入的设备名字，格式是 /dev/pts/[x]
+	 * cwd 是当前目录的路径名
 	 * 不知道是怎么通过 proc_send 将消息发送出去的 */
 	client_send_identify(ttynam, cwd);
 
@@ -427,7 +428,10 @@ client_main(struct event_base *base, int argc, char **argv, int flags)
 		size += sizeof *data;
 
 		/* Send the command. */
-		/* 这里的 fd 为什么是 -1 */
+		/* 这里的 fd 为什么是 -1？
+		 * 通过 socket pair 发送给 child 进程，对应的是服务端
+		 * 纵使这里 argc == 0，服务端也会修正为 new-session
+		 * */
 		if (proc_send(client_peer, msg, -1, data, size) != 0) {
 			fprintf(stderr, "failed to send command\n");
 			free(data);
