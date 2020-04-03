@@ -32,6 +32,7 @@ int	 imsg_fd_overhead = 0;
 
 static int	 imsg_get_fd(struct imsgbuf *);
 
+/* 初始化 imsgbuf 管理结构体的句柄 */
 void
 imsg_init(struct imsgbuf *ibuf, int fd)
 {
@@ -44,7 +45,9 @@ imsg_init(struct imsgbuf *ibuf, int fd)
 	ibuf->fd = fd;
 	/* 初始化这个 ibuf->w->fd */
 	ibuf->w.fd = fd;
+	/* 记录当前进程的 pid */
 	ibuf->pid = getpid();
+	/* 初始化消息管理结构体的 tailq */
 	TAILQ_INIT(&ibuf->fds);
 }
 

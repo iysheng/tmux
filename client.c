@@ -85,11 +85,12 @@ client_get_lock(char *lockfile)
 		return (-1);
 	}
 
-	/* 放置一个非阻塞的互斥锁 */
+	/* 放置一个非阻塞的互斥锁，表示同一时刻只有一个进程可以获取对应的 lockfd 句柄 */
 	if (flock(lockfd, LOCK_EX|LOCK_NB) == -1) {
 		log_debug("flock failed: %s", strerror(errno));
 		if (errno != EAGAIN)
 			return (lockfd);
+		/* 如果是被信号打断的，那么继续尝试 */
 		while (flock(lockfd, LOCK_EX) == -1 && errno == EINTR)
 			/* nothing */;
 		close(lockfd);
@@ -129,8 +130,9 @@ retry:
 		return (-1);
 
 	log_debug("trying connect");
-	/* 尝试链接本地服务端 socket，只要指定的文件所在目录存在就可以？？？
-	 * 第一次应该是返回 -1 ，因为这个 socket 不存在
+	/* 尝试链接本地服务端 socket，需要指定的文件存在，并且绑定了一个 server 端的 socket 才会
+	 * connect 成功,
+	 * 所以第一次 tmux 启动返回的总是 -1 ，因为这个作为 server 的 socket 不存在
 	 * */
 	if (connect(fd, (struct sockaddr *)&sa, sizeof sa) == -1) {
 		log_debug("connect failed: %s", strerror(errno));
@@ -139,8 +141,10 @@ retry:
 			goto failed;
 		if (!start_server)
 			goto failed;
+		/* 因为连接未成功，关闭这个句柄 fd */
 		close(fd);
 
+		/* 初始化 locked == 0 */
 		if (!locked) {
 			/* lockfile 的路径默认是 /tmp/tmux-1000/default.lock */
 			xasprintf(&lockfile, "%s.lock", path);
@@ -162,25 +166,31 @@ retry:
 			 * started the server and released the lock between our
 			 * connect() and flock().
 			 */
-			/* 即使拿到了这把 flock，至少也要 retry 1 次 */
+			/* 即使拿到了这把 flock，至少也要 retry 1 次
+			 * 标记拿到了这把文件锁
+			 * */
 			locked = 1;
 			goto retry;
 		}
 
 		/* 如果拿到了这把锁，尝试删除这个 path 文件，这个 path 默认是
-		 * /tmp/tmux-1000/default 文件，本地作为服务端的 AF_UNIX family 的 socket */
+		 * /tmp/tmux-1000/default 文件，本地作为服务端的 AF_UNIX family 的 socket
+		 * */
 		if (lockfd >= 0 && unlink(path) != 0 && errno != ENOENT) {
 			free(lockfile);
 			close(lockfd);
 			return (-1);
 		}
-		/* 第一次开启的时候，准备启动 server
+		/* 第一次 connect 的时候，因为没有对应的 server bind 这个 AF_UNIX 的 socket，
+		 * 所以不会成功，这个 fd 对应的是创建的 socket pair 的 pari[0] 准备启动 server
 		 * lockfd 是 flock 锁的句柄
 		 * lockfile 是 flock 锁对应的文件路径
+		 * 返回的 fd 是 parent 进程可以和 child 进程通信的句柄
 		 * */
 		fd = server_start(client_proc, base, lockfd, lockfile);
 	}
 
+	/* 因为已经拿到了这个文件锁，删除相关的锁文件 */
 	if (locked && lockfd >= 0) {
 		free(lockfile);
 		close(lockfd);
@@ -312,7 +322,7 @@ client_main(struct event_base *base, int argc, char **argv, int flags)
 	/* 修改这个进程的名字为 "client"
 	 * 这个进程目前是 parent 进程  */
 	client_proc = proc_start("client");
-	/* 设置这个线程处理信号的回调函数
+	/* 设置这个线程处理信号的回调函数 proc_signal_cb
 	 * 基于 libevent 框架，实际是注册对应信号的 event 的回调函数为 client_signal
 	 * */
 	proc_set_signals(client_proc, client_signal);

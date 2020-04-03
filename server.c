@@ -104,7 +104,9 @@ server_check_marked(void)
 }
 
 /* Create server socket. */
-/* 创建服务端的 socket，返回创建的 socket 句柄 */
+/* 服务端创建 socket 绑定 socket_path 文件，
+ * 之后才可以直接和这个 socket 通信，一般的地址是 /tmp/tmux-$(uid)/default
+ * 创建服务端的 socket，返回创建的 socket 句柄 */
 static int
 server_create_socket(char **cause)
 {
@@ -202,9 +204,9 @@ server_start(struct tmuxproc *client, struct event_base *base, int lockfd,
 	if (daemon(1, 0) != 0)
 		fatal("daemon failed");
 	/* 修改 child 进程也就是 server 一些信号 SIGINT, SIGPIPE, SIGTSTP 为默认的处理函数
-	 * 因为是 fork 的进程，需要删除 parent 进程关联的一些 event 事件，
-	 * 如果 default 参数为真，那么会重新修改那些 event 关联的信号为默认的
-	 * 处理进程
+	 * 因为是 fork 的进程，继承的是 parent 的内存空间数据，需要删除 parent 进程关联的
+	 * 一些 event 事件，如果 default 参数为真，那么会重新修改那些 event 关联的信号为
+	 * 默认的处理进程
 	 * */
 	proc_clear_signals(client, 0);
 	/* fork 进程后，需要在 child 进程重新初始化 event_base */
@@ -212,11 +214,12 @@ server_start(struct tmuxproc *client, struct event_base *base, int lockfd,
 		fatalx("event_reinit failed");
 	/* 修改进程的名字，申请一个 tmuxproc 实例内存空间
 	 * parent 进程对应的是 client 的 tmuxproc 实例，也就是全局变量 client_proc
-	 * 与之读应的 child 进程对应的是 server 的 tmuxproc 实例，也就是全局变量 server_proc
+	 * 与之对应的 child 进程对应的是 server 的 tmuxproc 实例，也就是全局变量 server_proc
 	 * */
 	server_proc = proc_start("server");
 	/* 修改一些信号的处理函数为 server_signal
 	 * 同时忽略掉三个信号 SIGINT, SIGPIPE, SIGTSTP
+	 * 修改 server 端的回调函数为 server_signal
 	 * */
 	proc_set_signals(server_proc, server_signal);
 	/* 恢复所有的信号状态 */
@@ -466,7 +469,7 @@ server_add_accept(int timeout)
 
 	if (timeout == 0) {
 		/* 初始化这个事件的 accept 回调函数为 server_accept
-		 * 并且初始化这个 event 关联到默认的 event_base，应该就是当前进程唯一
+		 * 并且初始化这个 event 关联到默认的 event_base，就是当前进程唯一
 		 * 的 event_base
 		 * */
 		event_set(&server_ev_accept, server_fd, EV_READ, server_accept,
@@ -482,7 +485,7 @@ server_add_accept(int timeout)
 
 /* Signal handler. */
 /* 服务端倾听 event 事件的回调函数
- * 与之对应的客户端是 client_signal */
+ * 与之对应的作为 client 的 event 事件的回调函数是 client_signal */
 static void
 server_signal(int sig)
 {
@@ -497,9 +500,15 @@ server_signal(int sig)
 	case SIGCHLD:
 		server_child_signal();
 		break;
+	/* 当客户端发送了 SIGUSR1 信号，触发服务端重新创建 server_socket 句柄，倾听 /tmp/tmux-$(uid)/default
+	 * 本机 socket，来实现进程间通讯
+	 * */
 	case SIGUSR1:
 		event_del(&server_ev_accept);
 		fd = server_create_socket(NULL);
+		/* 如果成功创建了倾听 client 端连接的 socket，那么使用这个新的 socket 句柄
+		 * 替换之前初始化时创建的 socket pair ？？？
+		 * */
 		if (fd != -1) {
 			close(server_fd);
 			server_fd = fd;

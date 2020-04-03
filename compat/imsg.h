@@ -45,6 +45,7 @@ struct msgbuf {
 		struct ibuf *tqh_first;	/* first element */
 		struct ibuf **tqh_last;	/* addr of last next element */
 	} bufs;
+	/* 标记 queue 了多少需要发送出去的消息 */
 	uint32_t		 queued;
 	/* 读写消息句柄 */
 	int			 fd;

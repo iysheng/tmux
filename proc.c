@@ -129,6 +129,9 @@ proc_event_cb(__unused int fd, short events, void *arg)
 	proc_update_event(peer);
 }
 
+/* 这个回调函数是通过函数 proc_set_signals 
+ * 初始化的 tmux_proc 的 event 的回调函数
+ * */
 static void
 proc_signal_cb(int signo, __unused short events, void *arg)
 {
@@ -154,6 +157,10 @@ peer_check_version(struct tmuxpeer *peer, struct imsg *imsg)
 	return (0);
 }
 
+/* 更新 tmuxpeer 实例的状态，核心还是当有消息缓存在这个 tmuxpeer 时
+ * 发送出去！！！，当有接收的数据在这个 tmuxpeer 时，通过回调函数处理
+ * 这些消息
+ * */
 static void
 proc_update_event(struct tmuxpeer *peer)
 {
@@ -170,8 +177,10 @@ proc_update_event(struct tmuxpeer *peer)
 		 * */
 		events |= EV_WRITE;
 	/* 重新初始化这个 event
-	 * 这里比上次可能会允许写事件， 这个 peer->ibuf.fd 还是上次传递的 fd
-	 * 到这里的时候，已经在函数 imsg_init(&peer->ibuf, fd) 完成了初始化
+	 * 如果有 queue 待发送出去的消息，当允许写时，触发 proc_event_cb 回调函数
+	 * 将消息发送出去，这个 peer->ibuf.fd 还是 imsg_init(&peer->ibuf, fd)  初
+	 * 始化时传递的 fd，可以通过 peer 这个回调函数的参数，找到对应的 tmuxpeer
+	 * 实例，然后找到对应的缓存的消息内容
 	 * */
 	event_set(&peer->event, peer->ibuf.fd, events, proc_event_cb, peer);
 
@@ -260,7 +269,7 @@ proc_set_signals(struct tmuxproc *tp, void (*signalcb)(int))
 {
 	struct sigaction	sa;
 
-	/* event 信号事件回调函数 */
+	/* 关联这个 tmuxproc 实例的 event 信号事件回调函数 */
 	tp->signalcb = signalcb;
 
 	memset(&sa, 0, sizeof sa);
@@ -353,6 +362,10 @@ proc_add_peer(struct tmuxproc *tp, int fd,
 
 	log_debug("add peer %p: %d (%p)", peer, fd, arg);
 
+	/* tmuxpeer 完成了初始化，更新 tmuxpeer 关联的 fd 的事件状态
+	 * 当有消息接收时处理这些消息
+	 * 当有消息缓存待发送时，将这些消息发送出去
+	 * */
 	proc_update_event(peer);
 	return (peer);
 }

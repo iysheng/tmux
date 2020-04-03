@@ -179,7 +179,9 @@ server_client_is_default_key_table(struct client *c, struct key_table *table)
 }
 
 /* Create a new client. */
-/* 创建一个新的 client，这个函数很重要！！！，我分析 client 对应的是 session */
+/* 创建一个新的 client，这个函数很重要！！！，我分析 client 对应的是 session
+ * 初步看，这个 fd 对应的作为服务端和 client 端双向通讯的 socket_pair 对的 pair[1]
+ * */
 struct client *
 server_client_create(int fd)
 {

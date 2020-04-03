@@ -190,6 +190,7 @@ ibuf_free(struct ibuf *buf)
 	free(buf);
 }
 
+/* 初始化消息的缓存区域 */
 void
 msgbuf_init(struct msgbuf *msgbuf)
 {
