@@ -115,7 +115,9 @@ proc_event_cb(__unused int fd, short events, void *arg)
 
 	/* 如果是 write 事件 */
 	if (events & EV_WRITE) {
+		/* 这里已经将消息发送出去了！！！ */
 		if (msgbuf_write(&peer->ibuf.w) <= 0 && errno != EAGAIN) {
+			/* 回调函数只是做额外的动作 */
 			peer->dispatchcb(NULL, peer->arg);
 			return;
 		}
@@ -222,6 +224,7 @@ proc_send(struct tmuxpeer *peer, enum msgtype type, int fd, const void *buf,
 	return (0);
 }
 
+/* 创建一个 tmuxproc 实例，名字初始化为 name 指向的字符串 */
 struct tmuxproc *
 proc_start(const char *name)
 {
@@ -264,6 +267,10 @@ proc_exit(struct tmuxproc *tp)
 	tp->exit = 1;
 }
 
+/* 关联 tmuxproc 的回调函数 signalcb
+ * 注册 tmuxproc 涉及到的 event 事件的回调函数
+ * 总结：初始化 tmuxproc 的管理的 event 事件的回调函数为 signalcb
+ * */
 void
 proc_set_signals(struct tmuxproc *tp, void (*signalcb)(int))
 {

@@ -1296,6 +1296,7 @@ server_client_loop(void)
 	struct session		*s;
 	int			 focus, attached, resize;
 
+	/* 遍历创建的所有 clients */
 	TAILQ_FOREACH(c, &clients, entry) {
 		server_client_check_exit(c);
 		if (c->session != NULL) {
@@ -1599,6 +1600,7 @@ server_client_check_exit(struct client *c)
 
 	if (c->flags & CLIENT_ATTACHED)
 		notify_client("client-detached", c);
+	/* 给 client 发送推出消息 */
 	proc_send(c->peer, MSG_EXIT, -1, &c->retval, sizeof c->retval);
 	c->flags |= CLIENT_EXITED;
 }
@@ -1763,7 +1765,7 @@ server_client_dispatch(struct imsg *imsg, void *arg)
 	case MSG_IDENTIFY_ENVIRON:
 	case MSG_IDENTIFY_CLIENTPID:
 	case MSG_IDENTIFY_DONE:
-		/* 新的 client 需要首先发送认证类消息 */
+		/* 新的 client 会首先发送认证类消息 */
 		server_client_dispatch_identify(c, imsg);
 		break;
 	case MSG_COMMAND:
@@ -1976,14 +1978,16 @@ server_client_dispatch_identify(struct client *c, struct imsg *imsg)
 	case MSG_IDENTIFY_STDIN:
 		if (datalen != 0)
 			fatalx("bad MSG_IDENTIFY_STDIN size");
-		/* 保存 parent dup 出来的 stdin 的描述符 */
+		/* 保存 client 进程 dup 出来的 stdin 的描述符
+		 * 这个是 client 的 stdin
+		 * */
 		c->fd = imsg->fd;
 		log_debug("client %p IDENTIFY_STDIN %d", c, imsg->fd);
 		break;
 	case MSG_IDENTIFY_ENVIRON:
 		if (datalen == 0 || data[datalen - 1] != '\0')
 			fatalx("bad MSG_IDENTIFY_ENVIRON string");
-		/* parent 进程传递的环境变量 */
+		/* client 端传递给 server 的环境变量 */
 		if (strchr(data, '=') != NULL)
 			environ_put(c->environ, data);
 		log_debug("client %p IDENTIFY_ENVIRON %s", c, data);
@@ -1991,7 +1995,7 @@ server_client_dispatch_identify(struct client *c, struct imsg *imsg)
 	case MSG_IDENTIFY_CLIENTPID:
 		if (datalen != sizeof c->pid)
 			fatalx("bad MSG_IDENTIFY_CLIENTPID size");
-		/* 记录 parent 进程的 pid 号 */
+		/* 记录 client 进程的 pid 号 */
 		memcpy(&c->pid, data, sizeof c->pid);
 		log_debug("client %p IDENTIFY_CLIENTPID %ld", c, (long)c->pid);
 		break;
@@ -2009,7 +2013,9 @@ server_client_dispatch_identify(struct client *c, struct imsg *imsg)
 		name = xstrdup(c->ttyname);
 	else
 		xasprintf(&name, "client-%ld", (long)c->pid);
-	/* 使用 ttyname 或者 client-%ld 来初始化为这个 client 的 name */
+	/* 使用 ttyname 或者 client-%ld 来初始化为这个 client 的 name
+	 * 一般都是 ttyname
+	 * */
 	c->name = name;
 	log_debug("client %p name is %s", c, c->name);
 
@@ -2017,6 +2023,7 @@ server_client_dispatch_identify(struct client *c, struct imsg *imsg)
 	c->fd = open(c->ttyname, O_RDWR|O_NOCTTY);
 #endif
 
+	/* 启动 tmux 时没有指定 -C 选项，则不会置位 CLIENT_CONTROL */
 	if (c->flags & CLIENT_CONTROL) {
 		close(c->fd);
 		c->fd = -1;
@@ -2048,6 +2055,7 @@ server_client_dispatch_identify(struct client *c, struct imsg *imsg)
 	/* 如果这是第一个 client，加载配置文件 */
 	if ((~c->flags & CLIENT_EXIT) &&
 	    !cfg_finished &&
+	    /* 这个 client 是创建的第一个 client */
 	    c == TAILQ_FIRST(&clients) &&
 	    TAILQ_NEXT(c, entry) == NULL)
 		/* 解析配置文件 */

@@ -128,7 +128,7 @@ tty_resize(struct tty *tty)
 	struct winsize	 ws;
 	u_int		 sx, sy, xpixel, ypixel;
 
-	/* 获取窗口大小 */
+	/* 获取当前终端窗口大小 */
 	if (ioctl(tty->fd, TIOCGWINSZ, &ws) != -1) {
 		sx = ws.ws_col;
 		if (sx == 0) {
