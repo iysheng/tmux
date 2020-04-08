@@ -109,6 +109,7 @@ tty_init(struct tty *tty, struct client *c, int fd, char *term)
 	else
 		tty->term_name = xstrdup(term);
 
+	/* 这个 fd 是 client 端发送的 stdin */
 	tty->fd = fd;
 	tty->client = c;
 
@@ -130,17 +131,21 @@ tty_resize(struct tty *tty)
 
 	/* 获取当前终端窗口大小 */
 	if (ioctl(tty->fd, TIOCGWINSZ, &ws) != -1) {
+		/* 获取字符的列数 */
 		sx = ws.ws_col;
 		if (sx == 0) {
 			sx = 80;
 			xpixel = 0;
 		} else
+			/* 计算每一行的像素值 */
 			xpixel = ws.ws_xpixel / sx;
+		/* 获取字符的行数 */
 		sy = ws.ws_row;
 		if (sy == 0) {
 			sy = 24;
 			ypixel = 0;
 		} else
+			/* 计算每一列的像素值 */
 			ypixel = ws.ws_ypixel / sy;
 	} else {
 		sx = 80;
@@ -150,7 +155,9 @@ tty_resize(struct tty *tty)
 	}
 	log_debug("%s: %s now %ux%u (%ux%u)", __func__, c->name, sx, sy,
 	    xpixel, ypixel);
-	/* 初始化 tty 实例的 sx、sy、xpixel、ypixel */
+	/* 初始化 tty 实例的 sx、sy、xpixel、ypixel
+	 * 分别表示当前窗口的字符行数和列数，以及每一行、每一列的像素值
+	 * */
 	tty_set_size(tty, sx, sy, xpixel, ypixel);
 	tty_invalidate(tty);
 }
@@ -1943,6 +1950,7 @@ tty_reset(struct tty *tty)
 static void
 tty_invalidate(struct tty *tty)
 {
+	/* 使用默认的网格数据初始化 tty 的 cell */
 	memcpy(&tty->cell, &grid_default_cell, sizeof tty->cell);
 
 	memcpy(&tty->last_cell, &grid_default_cell, sizeof tty->last_cell);

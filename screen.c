@@ -74,6 +74,7 @@ screen_free_titles(struct screen *s)
 void
 screen_init(struct screen *s, u_int sx, u_int sy, u_int hlimit)
 {
+	/* 初始化 screen 实例 */
 	s->grid = grid_create(sx, sy, hlimit);
 	s->title = xstrdup("");
 	s->titles = NULL;

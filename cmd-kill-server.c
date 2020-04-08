@@ -40,6 +40,9 @@ const struct cmd_entry cmd_kill_server_entry = {
 	.exec = cmd_kill_server_exec
 };
 
+/* 开启服务！！！
+ * client 端发送了认证消息，然后就会发送类型是 MSG_COMMAND，缺省是创建新的 session
+ * */
 const struct cmd_entry cmd_start_server_entry = {
 	.name = "start-server",
 	.alias = "start",

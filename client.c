@@ -132,7 +132,8 @@ retry:
     log_debug("trying connect");
     /* 尝试链接本地服务端 socket，需要指定的文件存在，并且绑定了一个 server 端的 socket 才会
      * connect 成功,
-     * 所以第一次 tmux 启动返回的总是 -1 ，因为这个作为 server 的 socket 不存在
+     * 所以第一次 tmux 启动返回的总是 -1 ，因为这个作为 server 的 socket 还不存在，只有当 tmux
+	 * 启动后，再次执行 tmux，这时候才会 connect 成功
      * */
     if (connect(fd, (struct sockaddr *)&sa, sizeof sa) == -1) {
         log_debug("connect failed: %s", strerror(errno));
@@ -186,6 +187,7 @@ retry:
          * lockfd 是 flock 锁的句柄
          * lockfile 是 flock 锁对应的文件路径
          * 返回的 fd 是 parent 进程可以和 child 进程通信的句柄
+         * 这个函数只会执行一次，即在第一次 tmux 启动的时候
          * */
         fd = server_start(client_proc, base, lockfd, lockfile);
     }
@@ -417,7 +419,8 @@ client_main(struct event_base *base, int argc, char **argv, int flags)
 
     /* Send first command. */
     /* 一般地 msg == MSG_COMMAND
-     * 并且发送的第一个命令是的 cmdflags CMD_STARTSERVER */ 
+     * 并且发送的第一个命令缺省是 new-session
+	 * */ 
     if (msg == MSG_COMMAND) {
         /* How big is the command? */
         size = 0;

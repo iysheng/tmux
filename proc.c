@@ -80,7 +80,7 @@ proc_event_cb(__unused int fd, short events, void *arg)
 	ssize_t		 n;
 	struct imsg	 imsg;
 
-	if (!(peer->flage & PEER_BAD) && (events & EV_READ)) {
+	if (!(peer->flags & PEER_BAD) && (events & EV_READ)) {
 		/* 尝试从 socket pair 读取消息 */
 		if (((n = imsg_read(&peer->ibuf)) == -1 && errno != EAGAIN) ||
 		    n == 0) {

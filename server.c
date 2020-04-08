@@ -49,7 +49,8 @@ struct clients		 clients;
 /* 保存作为服务端的 tmuxproc 实例指针 */
 struct tmuxproc		*server_proc;
 /* 保存 server 创建的 unix socket 句柄，该句柄在服务端，监听 client 的链接
- * 板定的是路径 socket_path，一般地路径是 /tmp/tmux-1000/default */
+ * 绑定的是路径 socket_path，一般地路径是 /tmp/tmux-1000/default
+ * */
 static int		 server_fd = -1;
 static int		 server_exit;
 /* 倾听 server_fd 对应的 socket 的 accept 事件 */
@@ -197,7 +198,7 @@ server_start(struct tmuxproc *client, struct event_base *base, int lockfd,
 	/* child 进程，关闭 pair[0] socket 句柄，只用 pair[1] 句柄
 	 * 就可以和 parent 进程通讯 */
 	close(pair[0]);
-	/* child 进程后台执行，作为守护进程
+	/* 新 fork 出来的 child 进程后台执行，作为守护进程
 	 * arg1 = 1，
 	 * arg2 = 0，重定向标准输入、输出、错误输出到 /dev/null
 	 * */
@@ -257,7 +258,7 @@ server_start(struct tmuxproc *client, struct event_base *base, int lockfd,
 	 * 的 socket pair，在创建这个 client 后，已经添加到全局变量 clients 管理
 	 * 的 tailq 了
 	 * server 在创建 client 的同时，会同步创建一个 tmuxpeer，将这个 tmuxpeer 关联
-	 * 到 client 实例
+	 * 到 client 实例，每创建一个 client 都会初始化一次 statusline
 	 * */
 	c = server_client_create(pair[1]);
 

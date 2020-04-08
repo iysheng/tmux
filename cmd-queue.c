@@ -87,6 +87,7 @@ cmdq_append(struct client *c, struct cmdq_item *item)
 struct cmdq_item *
 cmdq_insert_after(struct cmdq_item *after, struct cmdq_item *item)
 {
+	/* 获取 cmdq_item 对应的 client */
 	struct client		*c = after->client;
 	struct cmdq_list	*queue = after->queue;
 	struct cmdq_item	*next;
@@ -102,6 +103,7 @@ cmdq_insert_after(struct cmdq_item *after, struct cmdq_item *item)
 
 		if (c != NULL)
 			c->references++;
+		/* 初始化这个 item 的 client */
 		item->client = c;
 
 		item->queue = queue;
@@ -235,6 +237,7 @@ cmdq_get_command(struct cmd_list *cmdlist, struct cmd_find_state *current,
 			group = cmd->group;
 		}
 
+		/* 申请一个 cmdq_item 实例，关联到 cmdlist 这个管理结构体 */
 		item = xcalloc(1, sizeof *item);
 		xasprintf(&item->name, "[%s/%p]", cmd->entry->name, item);
 		item->type = CMDQ_COMMAND;

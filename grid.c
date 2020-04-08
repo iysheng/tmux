@@ -35,6 +35,12 @@
  * functions which work on the screen data.
  */
 
+/* grid data：这是一个基本的数据结构来表示现实在屏幕上的内容
+ * 一个 grid 是一个单元格网格，在将行中的单元格写入前，不会分配行
+ * 这个 grid 被拆分为历史和历史的可视数据，可视数据从第 0 行开始扩展到 hsize -1 行;
+ * 从 hsize 到 hsize + (sy - 1)；在这个文件所有的函数都使用绝对路径， grid-view.c 的
+ * 函数在屏幕上处理数据
+ * */
 /* Default grid cell data. */
 const struct grid_cell grid_default_cell = {
 	{ { ' ' }, 0, 1, 1 }, 0, 0, 8, 8, 0
@@ -254,7 +260,9 @@ grid_create(u_int sx, u_int sy, u_int hlimit)
 {
 	struct grid	*gd;
 
+	/* 创建一个网格 */
 	gd = xmalloc(sizeof *gd);
+	/* 初始化这个网格的宽度和高度 */
 	gd->sx = sx;
 	gd->sy = sy;
 

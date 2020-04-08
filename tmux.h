@@ -669,7 +669,9 @@ struct grid {
 	int			 flags;
 #define GRID_HISTORY 0x1 /* scroll lines into history */
 
+	/* 宽度 */
 	u_int			 sx;
+	/* 高度 */
 	u_int			 sy;
 
 	u_int			 hscrolled;
@@ -736,6 +738,7 @@ struct style {
 };
 
 /* Virtual screen. */
+/* 虚拟的屏幕 */
 struct screen_sel;
 struct screen_titles;
 struct screen {
@@ -743,6 +746,7 @@ struct screen {
 	char			*path;
 	struct screen_titles	*titles;
 
+    /* 网格抽象 */
 	struct grid		*grid;		/* grid data */
 
 	u_int			 cx;		/* cursor x */
@@ -1187,9 +1191,13 @@ struct tty {
 	struct client	*client;
 	struct event	 start_timer;
 
+	/* 行数 */
 	u_int		 sx;
+	/* 列数 */
 	u_int		 sy;
+	/* 每一行的像素值 */
 	u_int		 xpixel;
+	/* 每一列的像素值 */
 	u_int		 ypixel;
 
 	u_int		 cx;
@@ -1371,6 +1379,8 @@ enum cmd_parse_status {
 	CMD_PARSE_ERROR,
 	CMD_PARSE_SUCCESS
 };
+
+/* 解析 tmux 配置文件存储的信息的管理结构体！！！ */
 struct cmd_parse_result {
 	enum cmd_parse_status	 status;
 	struct cmd_list		*cmdlist;

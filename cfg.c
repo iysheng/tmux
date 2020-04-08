@@ -170,7 +170,7 @@ load_cfg(const char *path, struct client *c, struct cmdq_item *item, int flags,
 	pi.item = item;
 	pi.c = c;
 
-	/* 根据 pi 的信息解析配置文件，结果保存到 pr */
+	/* 解析配置文件，结果保存到 pr */
 	pr = cmd_parse_from_file(f, &pi);
 	fclose(f);
 	if (pr->status == CMD_PARSE_EMPTY)
@@ -185,6 +185,7 @@ load_cfg(const char *path, struct client *c, struct cmdq_item *item, int flags,
 		return (0);
 	}
 
+	/* 创建一个新的 new_item0 */
 	new_item0 = cmdq_get_command(pr->cmdlist, NULL, NULL, 0);
 	if (item != NULL)
 		new_item0 = cmdq_insert_after(item, new_item0);

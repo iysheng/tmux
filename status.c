@@ -280,12 +280,14 @@ status_pop_screen(struct client *c)
 void
 status_init(struct client *c)
 {
+	/* 获取这个 statu_sline 的内存首地址 */
 	struct status_line	*sl = &c->status;
 	u_int			 i;
 
 	for (i = 0; i < nitems(sl->entries); i++)
 		TAILQ_INIT(&sl->entries[i].ranges);
 
+	/* 绘制一个一行高度，宽度为当前窗口行的界面 */
 	screen_init(&sl->screen, c->tty.sx, 1, 0);
 	sl->active = &sl->screen;
 }
