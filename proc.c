@@ -219,7 +219,8 @@ proc_send(struct tmuxpeer *peer, enum msgtype type, int fd, const void *buf,
 	retval = imsg_compose(ibuf, type, PROTOCOL_VERSION, -1, fd, vp, len);
 	if (retval != 1)
 		return (-1);
-	/* 是在这里将消息发送出去的？？？ */
+	/* 是在这里将消息发送出去的，libevent 的 write 事件就是在允许 write 的时候
+	 * 将数据发送出去 */
 	proc_update_event(peer);
 	return (0);
 }

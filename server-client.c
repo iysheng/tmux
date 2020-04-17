@@ -1772,7 +1772,8 @@ server_client_dispatch(struct imsg *imsg, void *arg)
 		/* client 端发送的命令类型的消息
 		 * 在最初的 client，也就是 parent 进程
 		 * 发送过 identify 认证类消息后，就会发送 MSG_COMMAND 类的消息
-		 * 对应的 cmdflags 为 CMD_STARTSERVER
+		 * 缺省是创建新的 session，tmux 初次启动就会发送缺省的 MSG_COMMAND
+		 * 类型消息
 		 * */
 		server_client_dispatch_command(c, imsg);
 		break;
@@ -1874,7 +1875,7 @@ server_client_dispatch_command(struct client *c, struct imsg *imsg)
 	if (len > 0 && buf[len - 1] != '\0')
 		fatalx("bad MSG_COMMAND string");
 
-	/* 获取 argc 的值，一般地为 0 */
+	/* 获取 argc 的值，tmux 初次启动缺省为 0 */
 	argc = data.argc;
 	if (cmd_unpack_argv(buf, len, argc, &argv) != 0) {
 		cause = xstrdup("command too long");
@@ -1889,7 +1890,9 @@ server_client_dispatch_command(struct client *c, struct imsg *imsg)
 		*argv = xstrdup("new-session");
 	}
 
-	/* 解析这个命令，查找这个命令对应的 cmd_parse_result 实例 */
+	/* 解析这个命令，查找这个命令对应的 cmd_parse_result 实例
+	 * cmd-parese**** 相关的函数实现在 cmd-parse.c 文件
+	 * */
 	pr = cmd_parse_from_arguments(argc, argv, NULL);
 	switch (pr->status) {
 	case CMD_PARSE_EMPTY:
