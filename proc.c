@@ -232,6 +232,7 @@ proc_start(const char *name)
 	struct utsname	 u;
 
 	/* 尝试记录日志，如果没有 -v 选项，这里可以认为是空 */
+	/* 创建 log 文件 */
 	log_open(name);
 	/* 修改线程的名字 */
 	setproctitle("%s (%s)", name, socket_path);
