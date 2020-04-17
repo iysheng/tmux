@@ -174,6 +174,7 @@ proc_start(const char *name)
 	struct tmuxproc	*tp;
 	struct utsname	 u;
 
+	/* 创建 log 文件 */
 	log_open(name);
 	setproctitle("%s (%s)", name, socket_path);
 
