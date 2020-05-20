@@ -1219,6 +1219,7 @@ struct tty {
 	u_int		 rleft;
 	u_int		 rright;
 
+	/* stdin dup 出来的句柄 */
 	int		 fd;
 	struct event	 event_in;
 	struct evbuffer	*in;

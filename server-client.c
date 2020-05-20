@@ -2033,6 +2033,7 @@ server_client_dispatch_identify(struct client *c, struct imsg *imsg)
 
 		control_start(c);
 		c->tty.fd = -1;
+	/* 说明是 client 端发送过来的 client 的标准输入的句柄（这个是 dup 出来的） */
 	} else if (c->fd != -1) {
 		/* 根据 parent 的 dup 出来的 stdin 描述符和 TERM 环境变量的值，
 		 * 初始化 client 的 tty 成员 */

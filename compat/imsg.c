@@ -191,7 +191,9 @@ imsg_compose(struct imsgbuf *ibuf, uint32_t type, uint32_t peerid, pid_t pid,
 	if (imsg_add(wbuf, data, datalen) == -1)
 		return (-1);
 
-	/* 标记这个 wbuf 要通过哪个 fd 发送出去？？？ */
+	/* 标记这个 wbuf 要通过哪个 fd 发送出去？？？
+	 * 这个只是消息的一个 fd 参数
+	 * */
 	wbuf->fd = fd;
 
 	/* 将这一包新构造出来的消息 wbuf 添加到 ibuf 管理的消息 tailqueue */

@@ -428,7 +428,7 @@ server_accept(int fd, short events, __unused void *data)
 	if (!(events & EV_READ))
 		return;
 
-	/* 接受 client 的连接请求，创建一个信达 socket */
+	/* 接受 client 的连接请求，创建一个 socket */
 	newfd = accept(fd, (struct sockaddr *) &sa, &slen);
 	if (newfd == -1) {
 		if (errno == EAGAIN || errno == EINTR || errno == ECONNABORTED)

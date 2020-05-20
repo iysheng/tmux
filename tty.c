@@ -109,7 +109,7 @@ tty_init(struct tty *tty, struct client *c, int fd, char *term)
 	else
 		tty->term_name = xstrdup(term);
 
-	/* 这个 fd 是 client 端发送的 stdin */
+	/* 这个 fd 是 client 端发送的 dup stdin 的句柄 */
 	tty->fd = fd;
 	tty->client = c;
 

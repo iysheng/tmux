@@ -55,7 +55,7 @@ struct tmuxpeer {
 	/* 表示该 tmuxpeer 属于哪个 tmuxproc */
 	struct tmuxproc	*parent;
 
-	/* 描述消息的实例，这个结构体包含了 fd 句柄 */
+	/* 描述消息的管理实例，这个结构体包含了 fd 句柄 */
 	struct imsgbuf	 ibuf;
 	/* 这个 event 很重要，是 struct tmuxpeer  ！！！ */
 	struct event	 event;
@@ -198,6 +198,7 @@ int
 proc_send(struct tmuxpeer *peer, enum msgtype type, int fd, const void *buf,
     size_t len)
 {
+	/* 消息的管理实例指针 */
 	struct imsgbuf	*ibuf = &peer->ibuf;
 	void		*vp = (void *)buf;
 	int		 retval;
@@ -364,7 +365,8 @@ proc_add_peer(struct tmuxproc *tp, int fd,
 	peer->arg = arg;
 
 	/* 初始化句柄给读和写的管理结构体，并且关联 fd 到 struct tmuxpeer 的 ibuf
-	 * 管理实例和对应的写缓冲区的管理结构体 */
+	 * 管理实例和对应的写缓冲区的管理结构体
+	 * */
 	imsg_init(&peer->ibuf, fd);
 	/* 初始化 struct tmuxpeer 的 event，关联的是 fd，回调函数是 proc_event_cb */
 	event_set(&peer->event, fd, EV_READ, proc_event_cb, peer);

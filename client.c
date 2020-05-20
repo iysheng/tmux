@@ -33,7 +33,7 @@
 #include "tmux.h"
 
 static struct tmuxproc    *client_proc;
-/* 客户端 peer */
+/* 客户端 peer，这个是关联的 socket_pair 句柄 */
 static struct tmuxpeer    *client_peer;
 /* 保存的是 main 函数传递的初始化 flag，一般情况下，该值只是置位了 CLIENT_UTF8  */
 static int         client_flags;
@@ -134,6 +134,8 @@ retry:
      * connect 成功,
      * 所以第一次 tmux 启动返回的总是 -1 ，因为这个作为 server 的 socket 还不存在，只有当 tmux
 	 * 启动后，再次执行 tmux，这时候才会 connect 成功
+	 * 只有第一次启动 tmux 时，可以和服务进程通讯的句柄是执行 server_start 函数创建出来的 socketpair，
+	 * 其他的都是通过 connect 链接到 AF_UNIX 类型的 socket 
      * */
     if (connect(fd, (struct sockaddr *)&sa, sizeof sa) == -1) {
         log_debug("connect failed: %s", strerror(errno));
@@ -197,7 +199,7 @@ retry:
         free(lockfile);
         close(lockfd);
     }
-    /* parent 进程的 fd 为和 child 进程通讯的 socket pair[0] 句柄
+    /* parent 进程的 fd 是和 child 进程通讯的 socket pair[0] 句柄
      * 设置该 socket 为非阻塞态 */
     setblocking(fd, 0);
     return (fd);
@@ -332,7 +334,7 @@ client_main(struct event_base *base, int argc, char **argv, int flags)
     proc_set_signals(client_proc, client_signal);
 
     /* Initialize the client socket and start the server. */
-    /* parent 进程作为 client，得到了一个句柄是可以和 child 进程通讯的 pair[0] */
+    /* parent 进程作为 client，返回的是一个句柄是可以和守护进程（服务进程）通讯的 pair[0] */
     fd = client_connect(base, socket_path, cmdflags & CMD_STARTSERVER);
     if (fd == -1) {
         if (errno == ECONNREFUSED) {
@@ -344,11 +346,11 @@ client_main(struct event_base *base, int argc, char **argv, int flags)
         }
         return (1);
     }
-    /* 添加这个和 child 进程，也可以认为就是 server 端
-     * 通讯的 socket 句柄的回调函数 client_dispatch ！！！
+    /* 添加这个和 server 端通讯的 socket 句柄的回调函数 client_dispatch ！！！
      * 返回一个 tmuxpeer 实例指针，通过这个指针，可以找到对应的 fd 句柄
      * 通过发消息给该句柄，可以发送消息给 server，绑定这个 client 有 event
-     * 事件发生时，回调函数 client_dispatch
+     * 事件发生时，回调函数 client_dispatch，这个 client 是 tmux 启动唯一通过
+	 * socket_pair 可以和守护进程通讯的句柄
      * */
     client_peer = proc_add_peer(client_proc, fd, client_dispatch, NULL);
 
@@ -413,8 +415,10 @@ client_main(struct event_base *base, int argc, char **argv, int flags)
 
     /* Send identify messages. */
     /* 发送身份信息，ttyname 是当前进程标准输入的设备名字，格式是 /dev/pts/[x]
-     * cwd 是当前目录的路径名
-     * 不知道是怎么通过 proc_send 将消息发送出去的 */
+     * cwd 是当前目录的路径名！！！
+	 * 通过 libevent 框架将消息发送出去，接收端会通过对应
+     * 的句柄执行 libevent 回调函数
+     * */
     client_send_identify(ttynam, cwd);
 
     /* Send first command. */
@@ -503,7 +507,9 @@ client_send_identify(const char *ttynam, const char *cwd)
     int          fd, flags = client_flags;
     pid_t          pid;
 
-    /* fd 为什么是 -1？？？ */
+    /* fd 为什么是 -1， -1 应该是表示无效的 fd 句柄
+     * 通过 client_peer 将认证类消息发送出去给守护进程
+     * */
     proc_send(client_peer, MSG_IDENTIFY_FLAGS, -1, &flags, sizeof flags);
 
     /* 获取 TERM 环境变量，发送给 server */
@@ -522,7 +528,7 @@ client_send_identify(const char *ttynam, const char *cwd)
      * */
     if ((fd = dup(STDIN_FILENO)) == -1)
         fatal("dup failed");
-    /* 将消息通过创建出来的两个 socket pair 通信，发送给 server，也就是 child 进程 */
+	/* 向 fd 写数据，就等价向该进程的标准输入写数据 */
     proc_send(client_peer, MSG_IDENTIFY_STDIN, fd, NULL, 0);
 
     pid = getpid();
